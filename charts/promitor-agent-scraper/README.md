@@ -64,6 +64,15 @@ their default values.
 | `prometheus.enableMetricTimestamps`  | Indication wheter or not to include timestamp | `true`            |
 | `prometheus.metricUnavailableValue`  | Value to report in Prometheus when no metric was found wheter or not to include timestamp | `NaN`            |
 | `prometheus.enableServiceDiscovery`  | Indication wheter or not service discovery with annotations should be enabled ([docs](https://github.com/helm/charts/tree/master/stable/prometheus#scraping-pod-metrics-via-annotations)) | `true`            |
+| `prometheus.operator.serviceMonitor.enabled`  | Indication whether or not to create a ServiceMonitor object for Prometheus Operator | `false`            |
+| `prometheus.operator.serviceMonitor.namespace`  | The namespace where the ServiceMonitor should be created |                  |
+| `prometheus.operator.serviceMonitor.labels`  | Labels for the ServiceMonitor |       `{}`           |
+| `prometheus.operator.serviceMonitor.interval`  | How often Prometheus should scrape  | `60s`            |
+| `prometheus.operator.serviceMonitor.timeout`  | Timeout for the scraping operation | `10s`            |
+| `prometheusRule.enabled`          | Indication whether or not to create prometheusRules for Prometheus operator      | `false`                     |
+| `prometheusRule.additionalLabels` | Additional labels that can be used so prometheusRules will be discovered by Prometheus  | `{}`        |
+| `prometheusRule.namespace`        | namespace where prometheusRules object should be created          |                             |
+| `prometheusRule.rules`            | [rules](https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/) to be created | `[]` 
 | `telemetry.applicationInsights.enabled`  | Indication wheter or not to send telemetry to Azure Application Insights | `false`            |
 | `telemetry.applicationInsights.logLevel`  | Minimum level of logging for Azure Application Insights |             |
 | `telemetry.applicationInsights.key`  | Application Insights instrumentation key |             |

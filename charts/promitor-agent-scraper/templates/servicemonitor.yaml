@@ -1,0 +1,33 @@
+{{- if .Values.prometheus.operator.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+{{- if .Values.prometheus.operator.serviceMonitor.labels }}
+  labels:
+{{ toYaml .Values.prometheus.operator.serviceMonitor.labels | indent 4 }}
+{{- end }}
+  name: {{ template "promitor-agent-scraper.fullname" . }}
+{{- if .Values.prometheus.operator.serviceMonitor.namespace }}
+  namespace: {{ .Values.prometheus.operator.serviceMonitor.namespace }}
+{{- end }}
+spec:
+  endpoints:
+  - targetPort: http
+{{- if .Values.prometheus.operator.serviceMonitor.interval }}
+    interval: {{ .Values.prometheus.operator.serviceMonitor.interval }}
+{{- end }}
+{{- if .Values.prometheus.scrapeEndpointPath }}
+    path: {{ .Values.prometheus.scrapeEndpointPath }}
+{{- end }}
+{{- if .Values.prometheus.operator.serviceMonitor.timeout }}
+    scrapeTimeout: {{ .Values.prometheus.operator.serviceMonitor.timeout }}
+{{- end }}
+  jobLabel: {{ template "promitor-agent-scraper.fullname" . }}
+  namespaceSelector:
+    matchNames:
+    - {{ .Release.Namespace }}
+  selector:
+    matchLabels:
+      app: {{ template "promitor-agent-scraper.name" . }}
+      release: {{ .Release.Name }}
+{{- end }}

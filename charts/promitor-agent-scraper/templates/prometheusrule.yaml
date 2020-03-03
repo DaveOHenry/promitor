@@ -1,0 +1,23 @@
+{{- if .Values.prometheus.operator.prometheusRule.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ template "promitor-agent-scraper" . }}
+{{- with .Values.prometheus.operator.prometheusRule.namespace }}
+  namespace: {{ . }}
+{{- end }}
+  labels:
+    app: {{ template "promitor-agent-scraper.name" . }}
+    chart: {{ template "promitor-agent-scraper.chart" . }}
+    release: {{ .Release.Name | quote }}
+    heritage: {{ .Release.Service | quote }}
+{{- with .Values.prometheus.operator.prometheusRule.additionalLabels }}
+{{ toYaml . | indent 4 }}
+{{- end }}
+spec:
+{{- with .Values.prometheus.operator.prometheusRule.rules }}
+  groups:
+    - name: {{ template "promitor-agent-scraper.name" $ }}
+      rules: {{ tpl (toYaml .) $ | nindent 8 }}
+{{- end }}
+{{- end }}

@@ -69,10 +69,10 @@ their default values.
 | `prometheus.operator.serviceMonitor.labels`  | Labels for the ServiceMonitor |       `{}`           |
 | `prometheus.operator.serviceMonitor.interval`  | How often Prometheus should scrape  | `60s`            |
 | `prometheus.operator.serviceMonitor.timeout`  | Timeout for the scraping operation | `10s`            |
-| `prometheusRule.enabled`          | Indication whether or not to create prometheusRules for Prometheus operator      | `false`                     |
-| `prometheusRule.additionalLabels` | Additional labels that can be used so prometheusRules will be discovered by Prometheus  | `{}`        |
-| `prometheusRule.namespace`        | namespace where prometheusRules object should be created          |                             |
-| `prometheusRule.rules`            | [rules](https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/) to be created | `[]` 
+| `prometheus.operator.prometheusRule.enabled`          | Indication whether or not to create prometheusRules for Prometheus operator      | `false`                     |
+| `prometheus.operator.prometheusRule.additionalLabels` | Additional labels that can be used so prometheusRules will be discovered by Prometheus  | `{}`        |
+| `prometheus.operator.prometheusRule.namespace`        | namespace where prometheusRules object should be created          |                             |
+| `prometheus.operator.prometheusRule.rules`            | [rules](https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/) to be created | `[]` 
 | `telemetry.applicationInsights.enabled`  | Indication wheter or not to send telemetry to Azure Application Insights | `false`            |
 | `telemetry.applicationInsights.logLevel`  | Minimum level of logging for Azure Application Insights |             |
 | `telemetry.applicationInsights.key`  | Application Insights instrumentation key |             |

@@ -12,10 +12,20 @@ data:
   runtime.yaml: |-
       server:
         httpPort: {{ .Values.service.targetPort | quote }}
-      prometheus:
-        metricUnavailableValue: {{ .Values.prometheus.metricUnavailableValue | quote }}
-        enableMetricTimestamps: {{ .Values.prometheus.enableMetricTimestamps | quote }}
-        scrapeEndpoint:
+      metricSinks:
+  {{- if .Values.metricSinks.statsd.host }}
+        statsd:
+          host: {{ .Values.metricSinks.statsd.host | quote }}
+  {{- if .Values.metricSinks.statsd.port }}
+          port: {{ .Values.metricSinks.statsd.port | quote }}
+  {{- end }}
+  {{- if .Values.metricSinks.statsd.metricPrefix }}
+          metricPrefix: {{ .Values.metricSinks.statsd.metricPrefix | quote }}
+  {{- end }}
+  {{- end }}
+        prometheusScrapingEndpoint:
+          metricUnavailableValue: {{ .Values.prometheus.metricUnavailableValue | quote }}
+          enableMetricTimestamps: {{ .Values.prometheus.enableMetricTimestamps | quote }}
           baseUriPath: {{ .Values.prometheus.scrapeEndpointPath | quote }}
       metricsConfiguration:
         absolutePath: /config/metrics-declaration.yaml

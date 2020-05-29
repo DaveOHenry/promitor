@@ -29,14 +29,15 @@ values are `v1`.
   a cron that fits your needs.
 - `metricDefaults.aggregation.interval` - The default interval which defines over
   what period measurements of a metric should be aggregated.
+  a cron that fits your needs.
+- `metricDefaults.labels` - The default lebals that will be applied to all metrics. _(starting as of v1.6)_
 
 ### Metrics
 
 Every metric that is being declared needs to define the following fields:
 
-- `name` - Name of the metric that will be exposed in the scrape endpoint for Prometheus.
-- `description` - Description for the metric that will be exposed in the scrape
-  endpoint for Prometheus.
+- `name` - Name of the metric that will be reported.
+- `description` - Description for the metric that will be reported.
 - `resourceType` - Defines what type of resource needs to be queried.
 - `azureMetricConfiguration.metricName` - The name of the metric in Azure Monitor
   to query
@@ -46,8 +47,12 @@ Every metric that is being declared needs to define the following fields:
   interval defined in `metricDefaults.aggregation.interval` with a new interval
 - `resources` - An array of one or more resources to get metrics for. The fields
   required vary depending on the `resourceType` being created, and are documented
-  for each resource. All resources support an optional `resourceGroupName` to allow
-  the global resource group to be overridden.
+  for each resource.
+
+All resources provide the capability to override the default Azure metadata:
+
+- `subscriptionId` - Changes the subscription id to which the resource belongs. _(Overrides `azureMetadata.subscriptionId`)_
+- `resourceGroupName` - Changes the resource group that contains resource. (Overrides `azureMetadata.resourceGroupName`)
 
 Additionally, the following fields are optional:
 
@@ -79,6 +84,9 @@ metricDefaults:
   scraping:
     # Every minute
     schedule: "0 * * ? * *"
+  labels:
+    geo: china
+    environment: dev
 metrics:
   - name: azure_service_bus_active_messages
     description: "The number of active messages on a service bus queue."
@@ -102,6 +110,7 @@ metrics:
       - namespace: promitor-messaging-dev
         queueName: orders
         resourceGroupName: promitor-dev
+        subscriptionId: ABC
 ```
 
 ## Supported Azure Services
@@ -119,6 +128,9 @@ We also provide a simplified way to scrape the following Azure resources:
 - [Azure Cosmos DB](cosmos-db)
 - [Azure Database for PostgreSQL](postgresql)
 - [Azure Function App](function-app)
+- [Azure IoT Hub](iot-hub)
+- [Azure IoT Hub Device Provisioning Service (DPS)](iot-hub-device-provisioning-service)
+- [Azure Key Vault](key-vault)
 - [Azure Network Interface](network-interface)
 - [Azure Service Bus Queue](service-bus-queue)
 - [Azure SQL Database](sql-database)

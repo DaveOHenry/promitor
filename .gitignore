@@ -8,6 +8,7 @@
 *.user
 *.userosscache
 *.sln.docstates
+**/appsettings.local.json
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
@@ -301,3 +302,5 @@ docs/_site/*
 .DS_Store
 
 *.orig
+changelog/public/
+changelog/resources/_gen/

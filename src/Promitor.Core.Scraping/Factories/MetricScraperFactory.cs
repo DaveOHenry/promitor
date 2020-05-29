@@ -1,10 +1,10 @@
 ﻿using System;
 using GuardNet;
 using Microsoft.Extensions.Logging;
+using Promitor.Core.Metrics.Sinks;
 using Promitor.Core.Scraping.Configuration.Model;
 using Promitor.Core.Scraping.Configuration.Model.Metrics;
 using Promitor.Core.Scraping.Interfaces;
-using Promitor.Core.Scraping.Prometheus.Interfaces;
 using Promitor.Core.Scraping.ResourceTypes;
 using Promitor.Integrations.AzureMonitor;
 
@@ -24,14 +24,13 @@ namespace Promitor.Core.Scraping.Factories
         /// <summary>
         ///     Creates a scraper that is capable of scraping a specific resource type
         /// </summary>
-        /// <param name="azureMetadata">Metadata concerning the Azure resources</param>
         /// <param name="metricDefinitionResourceType">Resource type to scrape</param>
+        /// <param name="metricSinkWriter">Writer to send metrics to all sinks</param>
         /// <param name="prometheusMetricWriter">Metrics collector for our Prometheus scraping endpoint</param>
         /// <param name="azureMonitorClient">Client to interact with Azure Monitor</param>
-        public IScraper<IAzureResourceDefinition> CreateScraper(ResourceType metricDefinitionResourceType, AzureMetadata azureMetadata,
-            IPrometheusMetricWriter prometheusMetricWriter, AzureMonitorClient azureMonitorClient)
+        public IScraper<IAzureResourceDefinition> CreateScraper(ResourceType metricDefinitionResourceType, MetricSinkWriter metricSinkWriter, IPrometheusMetricWriter prometheusMetricWriter, AzureMonitorClient azureMonitorClient)
         {
-            var scraperConfiguration = new ScraperConfiguration(azureMetadata, azureMonitorClient, prometheusMetricWriter, _logger);
+            var scraperConfiguration = new ScraperConfiguration(azureMonitorClient, metricSinkWriter, prometheusMetricWriter, _logger);
 
             switch (metricDefinitionResourceType)
             {
@@ -77,6 +76,12 @@ namespace Promitor.Core.Scraping.Factories
                     return new BlobStorageScraper(scraperConfiguration);
                 case ResourceType.FileStorage:
                     return new FileStorageScraper(scraperConfiguration);
+                case ResourceType.IoTHub:
+                    return new IoTHubScraper(scraperConfiguration);
+                case ResourceType.DeviceProvisioningService:
+                    return new DeviceProvisioningServiceScraper(scraperConfiguration);
+                case ResourceType.KeyVault:
+                    return new KeyVaultScraper(scraperConfiguration);
                 default:
                     throw new ArgumentOutOfRangeException();
             }

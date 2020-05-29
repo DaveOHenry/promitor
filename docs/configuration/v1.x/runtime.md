@@ -6,7 +6,12 @@ title: Runtime Configuration
 This article covers an overview of all the knobs that you can tweak to align the
 runtime with your needs.
 
-Promitor runtime is configured by mounting a volume to `/config/runtime.yaml`.
+Promitor runtime is configured by mounting the configuration to a volume.
+
+Depending on the operating system, it need to be available on :
+
+- `/config/runtime.yaml` for Linux
+- `c:/config/runtime.yaml` for Windows
 
 We provide the capability to override te runtime YAML via [environment variables](#overriding-configuration-with-environment-variables),
 if you have the need for it.
@@ -16,6 +21,11 @@ Here is a complete example of the runtime YAML:
 ```yaml
 server:
   httpPort: 80 # Optional. Default: 80
+metricSinks:
+  statsd:
+    host: graphite
+    port: 8125 # Optional. Default: 8125
+    metricPrefix: promitor. # Optional. Default: None
 prometheus:
   metricUnavailableValue: NaN # Optional. Default: NaN
   enableMetricTimestamps: false # Optional. Default: true
@@ -50,22 +60,62 @@ server:
   httpPort: 80 # Optional. Default: 80
 ```
 
-## Prometheus Scraping Endpoint
+## Metric Sinks
 
 Promitor automatically scrapes Azure Monitor and makes the information available
-based on the metrics configuration.
+by providing the metric information to the configured sinks.
 
-The behavior of this can be configured to fit your needs:
+As of today, we support the follow sinks:
 
-- `prometheus.metricUnavailableValue` - Defines the value that will be reported
+- **Prometheus Scraping Endpoint**
+- **StatsD**
+
+### Prometheus Scraping Endpoint
+
+![Availability Badge](https://img.shields.io/badge/Available%20Starting-v1.6-green.svg)
+
+In order to expose a Prometheus Scraping endpoint, you'll need to configure the sink:
+
+- `prometheusScrapingEndpoint.metricUnavailableValue` - Defines the value that will be reported
   if a metric is unavailable. (Default: `NaN`)
-- `prometheus.enableMetricTimestamps` - Defines whether or not a timestamp should
+- `prometheusScrapingEndpoint.enableMetricTimestamps` - Defines whether or not a timestamp should
   be included when the value was scraped on Azure Monitor. Supported values are
   `True` to opt-in & `False` to opt-out. (Default: `true`)
-- `prometheus.scrapeEndpoint.baseUriPath` - Controls the path where the scraping
+- `prometheusScrapingEndpoint.scrapeEndpoint.baseUriPath` - Controls the path where the scraping
   endpoint for Prometheus is being exposed.  (Default: `/metrics`)
 
-Example:
+```yaml
+metricSinks:
+  prometheusScrapingEndpoint:
+    metricUnavailableValue: NaN # Optional. Default: NaN
+    enableMetricTimestamps: false # Optional. Default: true
+    baseUriPath: /metrics # Optional. Default: /metrics
+```
+
+### StatsD
+
+![Availability Badge](https://img.shields.io/badge/Available%20Starting-v1.6-green.svg)
+
+In order to push metrics to a StatsD server, you'll need to configure the sink:
+
+- `metricSinks.statsd.host` - DNS name or IP address of StatsD server.
+- `metricSinks.statsd.host` - Port (UDP) address of StatsD server. (Default: `8125`)
+- `metricSinks.statsd.metricPrefix` - Prefix that will be added to every metric
+ defined in the metric declaration.
+
+```yaml
+metricSinks:
+  statsd:
+    host: graphite
+    port: 8125
+    metricPrefix: promitor.
+```
+
+### Prometheus Scraping Endpoint - Legacy Configuration
+
+![Availability Badge](https://img.shields.io/badge/Will%20Be%20Removed%20In-v2.0-red.svg)
+
+For now, we still support configuring it by using the the old way of configuration:
 
 ```yaml
 prometheus:
@@ -74,6 +124,8 @@ prometheus:
   scrapeEndpoint:
     baseUriPath: /metrics # Optional. Default: /metrics
 ```
+
+However, this approach is deprecated and will be removed in 2.0 so we recommend migrating to metric sink approach.
 
 ## Metric Configuration
 

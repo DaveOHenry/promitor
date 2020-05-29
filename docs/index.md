@@ -1,6 +1,6 @@
 ---
 layout: default
-title: Promitor - An Azure Monitor scraper for Prometheus
+title: Promitor - Bringing Azure Monitor metrics where you need them
 ---
 
 [![License](https://img.shields.io/github/license/mashape/apistatus.svg?style=flat-square)](https://github.com/tomkerkhove/promitor/blob/master/LICENSE)
@@ -8,8 +8,8 @@ title: Promitor - An Azure Monitor scraper for Prometheus
 [![Docker Pulls](https://img.shields.io/docker/pulls/tomkerkhove/promitor-agent-scraper.svg?style=flat-square)](https://hub.docker.com/r/tomkerkhove/promitor-agent-scraper/)
 [![Docker Stars](https://img.shields.io/docker/stars/tomkerkhove/promitor-agent-scraper.svg?style=flat-square)](https://hub.docker.com/r/tomkerkhove/promitor-agent-scraper/)[![Donate](https://img.shields.io/badge/Donate%20via-GitHub-blue.svg?style=flat-square)](https://github.com/users/tomkerkhove/sponsorship)
 
-**Promitor** is an **Azure Monitor scraper for Prometheus** providing a scraping
-endpoint for Prometheus that provides a configured subset of Azure Monitor metrics.
+**Promitor** is an Azure Monitor scraper which makes the metrics available
+through a scraping endpoint for Prometheus or push to a StatsD server.
 
 {:refdef: style="text-align: center;"}
 ![Promitor](./media/logos/promitor.png)
@@ -24,20 +24,21 @@ docker run -d -p 8999:80 --name promitor-agent-scraper \
                          --env PROMITOR_AUTH_APPID='<azure-ad-app-id>'   \
                          --env-file C:/Promitor/az-mon-auth.creds \
                          --volume C:/Promitor/metrics-declaration.yaml:/config/metrics-declaration.yaml \
-                         --volume C:/Promitor/runtime-config.yaml:/config/runtime.yaml \
-                         tomkerkhove/promitor-agent-scraper:1.0.0
+                         --volume C:/Promitor/runtime.yaml:/config/runtime.yaml \
+                         tomkerkhove/promitor-agent-scraper:1.4.0
 ```
 
 Docker image is available on [Docker Hub](https://hub.docker.com/r/tomkerkhove/promitor-agent-scraper/).
 
 ## Features
 
-- Provides scraping endpoint for Prometheus
-- Automatically scrapes Azure Monitor metrics (single and multi-dimensional)
+- Automatically pushes metrics to systems such as Prometheus & StatsD
+- Automatically scrapes Azure Monitor metrics (single and multi-dimensional) across various subscription & resource groups
 - Built-in support for a variety of Azure services ([overview](configuration/v1.x/metrics#supported-azure-services))
 - Easy to declare metrics to scrape via YAML & APIs
 - Easily deployable via Docker & Kubernetes
 - Sends telemetry to container logs & Azure Application Insights
+- Available for Linux & Windows runtimes
 - Support for all Azure clouds
 
 And there is more on the way - Check our [backlog](https://github.com/tomkerkhove/promitor/issues)
@@ -54,8 +55,10 @@ and vote for features!
   - [Supported Providers](configuration/v1.x/metrics#supported-azure-services)
   - [What labels do we provide?](metrics/labels)
 - **Configuration**
+  - [Overview of metric sinks](configuration/v1.x/runtime#metric-sinks)
+    - [Prometheus Scraping Endpoint](configuration/v1.x/runtime#prometheus-scraping-endpoint)
+    - [StatsD](configuration/v1.x/runtime#statsd)
   - [Authentication with Azure Monitor](configuration/v1.x/azure-monitor)
-  - [Prometheus Scraping Endpoint](configuration/v1.x/runtime#prometheus-scraping-endpoint)
   - [Logging & External Providers](configuration/v1.x/runtime#telemetry)
   - [Runtime](configuration/v1.x/runtime)
 - **Operations**
@@ -82,6 +85,7 @@ Feel free to [let us know](https://github.com/tomkerkhove/promitor/issues/new/ch
 We are proud to have the following customer(s) running Promitor in production:
 
 ![Walmart Labs](./media/logos/customers/walmart-labs.jpg)
+![ResDiary](./media/logos/customers/resdiary.png)
 
 ## Thank you
 

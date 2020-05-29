@@ -61,8 +61,8 @@ The C# code for Promitor can be found in the `/src` folder in the repository. Th
 Promitor code is split into multiple projects by functionality, with the following
 projects worth highlighting:
 
-- Promitor.Scraper.Host - contains the main console application that runs Promitor.
-- Promitor.Scraper.Tests.Unit - contains the XUnit unit tests.
+- Promitor.Agents.Scraper - contains the main console application that runs Promitor.
+- Promitor.Tests.Unit - contains the XUnit unit tests.
 - Promitor.Docker - contains a Visual Studio Docker project for running Promitor
   during development.
 
@@ -72,7 +72,7 @@ If you are using Visual Studio, the solution file for Promitor is [src/Promitor.
 
 ### Running Tests
 
-To run the unit tests for Promitor, open a terminal and navigate to `src/Promitor.Scraper.Tests.Unit`,
+To run the unit tests for Promitor, open a terminal and navigate to `src/Promitor.Tests.Unit`,
 and run the following command:
 
 ```shell
@@ -98,7 +98,7 @@ and set the following environment variables:
   Azure Monitor API.
 - `PROMITOR_AUTH_APPKEY` - your service principal secret.
 
-Next, edit [src/metric-config.yaml](src/metric-config.yaml) and set the following
+Next, edit [src/metrics.yaml](src/metrics.yaml) and set the following
 keys:
 
 - `azureMetadata.tenantId` - your Azure tenant Id.
@@ -112,7 +112,7 @@ Promitor.Docker project.
 You can find more information about how to configure Promitor [here](https://promitor.io/configuration/v1.x/metrics/).
 
 **NOTE:** Please make sure not to commit your changes to `docker-compose.override.yml`
-or `metric-config.yaml`. If you do, you may end up publishing your Azure credentials
+or `metrics.yaml`. If you do, you may end up publishing your Azure credentials
 by accident.
 
 ## Docker
@@ -120,5 +120,5 @@ by accident.
 To build the Docker image, run the following command from the `/src` directory:
 
 ```shell
-docker build . --file .\Promitor.Scraper.Host\Dockerfile --tag promitor --no-cache
+docker build . --file .\Promitor.Agents.Scraper\Dockerfile --tag promitor --no-cache
 ```

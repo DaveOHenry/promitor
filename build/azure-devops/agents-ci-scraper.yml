@@ -1,0 +1,238 @@
+name: $(Date:yyyyMMdd)$(Rev:.r)
+resources:
+- repo: self
+trigger:
+- master
+pr:
+  branches:
+    include:
+    - master
+  paths:
+    include:
+    - src/*
+    - build/azure-devops/agents-ci-scraper.yml
+    - charts/promitor-agent-scraper/*
+variables:
+  - template: ./variables/build.yml
+  - name: Image.Name
+    value: 'tomkerkhove/promitor-agent-scraper-ci'
+  - name: Image.TaggedName
+    value: '$(Image.Name):$(Tags.PR)'
+  - name: Helm.Chart.Version
+    value: '0.0.0-$(App.Version)'
+  - name: Helm.Chart.Official.Name
+    value: 'promitor-agent-scraper'
+  - name: Helm.Chart.CI.Name
+    value: 'promitor-agent-scraper-ci'
+stages:
+- stage: Init
+  displayName: Prepare Build
+  dependsOn: []
+  jobs:
+   - job: DetermineVersion
+     displayName: Determine Version
+     pool:
+       vmImage: ubuntu-16.04
+     steps:
+     - ${{ if eq(variables['Build.Reason'], 'PullRequest') }}:
+        - template: ./../templates/determine-pr-version.yml
+     - template: ./../templates/persist-variable.yml
+       parameters:
+        currentVariableName: 'Build.BuildNumber'
+        persistedVariableName: 'App.Version'
+     - publish: $(Pipeline.Workspace)/variables
+       artifact: variables
+- stage: Build
+  dependsOn: [Init]
+  jobs:
+   - job: Build
+     displayName: Build Codebase
+     condition: succeeded()
+     pool:
+       vmImage: ubuntu-16.04
+     steps:
+     - template: ./../templates/build-solution.yml
+       parameters:
+        dotnetVersion: '$(DotNet.SDK.Version)'
+        buildConfiguration: '$(DotNet.Configuration)'
+        targetFolder: '$(Pipeline.Workspace)/build'
+     - task: PublishPipelineArtifact@0
+       displayName: 'Publish Build Pipeline Artifact'
+       inputs:
+         targetPath: '$(Pipeline.Workspace)/build'
+         artifactName: Build
+- stage: CodeQuality
+  displayName: Code Quality
+  dependsOn: [Init]
+  jobs:
+   - job: RunCodeQuality
+     displayName: Run Code Quality
+     condition: succeeded()
+     pool:
+       vmImage: windows-2019
+     steps:
+     - template: ./../templates/run-code-quality.yml
+       parameters:
+        dotnetVersion: '$(DotNet.Sdk.Version)'
+- stage: Test
+  displayName: Run Tests
+  dependsOn: [Init]
+  jobs:
+   - job: RunUnitTests
+     displayName: Run Unit Tests
+     condition: succeeded()
+     pool:
+       vmImage: ubuntu-16.04
+     steps:
+     - template: ./../templates/run-unit-tests.yml
+       parameters:
+        dotnetVersion: '$(DotNet.Sdk.Version)'
+        buildConfiguration: '$(DotNet.Configuration)'
+- stage: Docker
+  displayName: Docker Image
+  dependsOn: [Init]
+  variables:
+    Tags.PR: '$(App.Version)-$(OS.Name)'
+  jobs:
+   - job: DockerBuildLinux
+     displayName: Build Docker Image (Linux)
+     condition: succeeded()
+     pool:
+       vmImage: ubuntu-16.04
+     variables:
+       Image.TaggedName.OSAgnostic: '$(Image.Name):$(App.Version)'
+       Tags.Experimental: 'experimental-$(OS.Name)'
+       OS.Name: 'linux'
+     steps:
+     - download: current
+       artifact: variables
+     - template: ./../templates/read-variable-on-linux.yml
+       parameters:
+        variableName: 'App.Version'
+     - ${{ if not(eq(variables['Build.Reason'], 'PullRequest')) }}:
+        - template: ./../templates/build-scraper-image.yml
+          parameters:
+             imageName: '$(Image.TaggedName)'
+             tags: '--tag promitor-agent-scraper-ci'
+             os: '$(OS.Name)'
+     - ${{ if eq(variables['Build.Reason'], 'PullRequest') }}:
+        - template: ./../templates/build-scraper-image.yml
+          parameters:
+             imageName: '$(Image.TaggedName)'
+             tags: '--tag promitor-agent-scraper-ci --tag $(Image.TaggedName.OSAgnostic)'
+             os: '$(OS.Name)'
+     - template: ./../templates/run-scraper-image.yml
+       parameters:
+          volumes: '/src/metrics.yaml:/config/metrics-declaration.yaml promitor-agent-scraper-ci'
+          imageName: '$(Image.TaggedName)'
+          os: '$(OS.Name)'
+     - ${{ if eq(variables['Build.Reason'], 'PullRequest') }}:
+        - template: ./../templates/push-docker-image.yml
+          parameters:
+              imageName: '$(Image.TaggedName)'
+        - template: ./../templates/push-docker-image.yml
+          parameters:
+              imageName: '$(Image.TaggedName.OSAgnostic)'
+   - job: DockerBuildWindows
+     displayName: Build Docker Image (Windows)
+     condition: succeeded()
+     pool:
+       vmImage: windows-2019
+     variables:
+       OS.Name: 'windows'
+     steps:
+     - download: current
+       artifact: variables
+     - template: ./../templates/read-variable-on-windows.yml
+       parameters:
+        variableName: 'App.Version'
+     - ${{ if eq(variables['Build.Reason'], 'PullRequest') }}:
+        - template: ./../templates/determine-pr-version.yml
+     - ${{ if not(eq(variables['Build.Reason'], 'PullRequest')) }}:
+        - template: ./../templates/build-scraper-image.yml
+          parameters:
+             imageName: '$(Image.TaggedName)'
+             buildArgs: '--build-arg CONFIG_FOLDER="c:/config/"'
+             tags: '--tag promitor-agent-scraper-ci --tag promitor-agent-scraper-ci-non-pr'
+             os: '$(OS.Name)'
+     - template: ./../templates/build-scraper-image.yml
+       parameters:
+          imageName: '$(Image.TaggedName)'
+          buildArgs: '--build-arg CONFIG_FOLDER="c:/config/"'
+          tags: '--tag promitor-agent-scraper-ci'
+          os: '$(OS.Name)'
+     - template: ./../templates/run-scraper-image.yml
+       parameters:
+          volumes: '$(System.DefaultWorkingDirectory)\src:c:\config promitor-agent-scraper-ci'
+          imageName: '$(Image.TaggedName)'
+          os: '$(OS.Name)'
+     - ${{ if eq(variables['Build.Reason'], 'PullRequest') }}:
+        - template: ./../templates/push-docker-image.yml
+          parameters:
+              imageName: '$(Image.TaggedName)'
+- stage: Helm2
+  displayName: Helm Chart (2.x)
+  dependsOn: Docker
+  jobs:
+   - job: Helm2_x
+     displayName: Helm 2.x - Lint
+     condition: succeeded()
+     variables:
+       Helm.Version: '2.9.1'
+     pool:
+       vmImage: ubuntu-16.04
+     steps:
+     - template: ./templates/lint-helm-chart.yml
+       parameters:
+        helmVersion: '$(Helm.Version)'
+        chartName: '$(Helm.Chart.Official.Name)'
+- stage: Helm3
+  displayName: Helm Chart (3.x)
+  dependsOn: Docker
+  variables:
+    Helm.Version: '3.0.0'
+  jobs:
+   - job: Helm3_x
+     displayName: Helm 3.x - Lint, Package & Push Chart
+     condition: succeeded()
+     pool:
+       vmImage: ubuntu-16.04
+     steps:
+     - download: current
+       artifact: variables
+     - template: ./../templates/read-variable-on-linux.yml
+       parameters:
+        variableName: 'App.Version'
+     - template: ./templates/lint-helm-chart.yml
+       parameters:
+        helmVersion: '$(Helm.Version)'
+        chartName: '$(Helm.Chart.Official.Name)'
+     - task: PowerShell@2
+       displayName: 'Transform Helm Chart in CI Chart'
+       inputs:
+        targetType: filePath
+        filePath: ./build/helm/CI/Transform-Chart.ps1
+        arguments: '-chartName "$(Helm.Chart.CI.Name)" -imageName "$(Image.Name)" -imageTag "$(App.Version)"'
+        workingDirectory: 'charts'
+     - task: PowerShell@2
+       displayName: 'Package Helm Chart'
+       inputs:
+        targetType: filePath
+        filePath: ./build/helm/CI/Package-Chart.ps1
+        arguments: '-chartName "$(Helm.Chart.CI.Name)" -chartVersion "$(Helm.Chart.Version)"'
+        workingDirectory: 'charts'
+     - task: AzureCLI@1
+       displayName: 'Push Helm Chart to Azure Container Registry'
+       inputs:
+        azureSubscription: 'Visual Studio Enterprise (0f9d7fea-99e8-4768-8672-06a28514f77e)'
+        scriptLocation: inlineScript
+        inlineScript: |
+         az configure --defaults acr=promitor
+         az acr helm push --name promitor charts/output/$(Helm.Chart.CI.Name)-$(Helm.Chart.Version).tgz --force
+       condition: eq(variables['Build.Reason'], 'PullRequest')
+     - task: PublishBuildArtifacts@1
+       displayName: 'Publish Helm Chart'
+       inputs:
+        PathtoPublish: charts/output/$(Helm.Chart.CI.Name)-$(Helm.Chart.Version).tgz
+        ArtifactName: helm
+       condition: eq(variables['Build.Reason'], 'PullRequest')

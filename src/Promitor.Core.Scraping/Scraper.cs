@@ -4,10 +4,9 @@ using GuardNet;
 using Microsoft.Azure.Management.Monitor.Fluent.Models;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
-using Promitor.Core.Scraping.Configuration.Model;
+using Promitor.Core.Metrics.Sinks;
 using Promitor.Core.Scraping.Configuration.Model.Metrics;
 using Promitor.Core.Scraping.Interfaces;
-using Promitor.Core.Scraping.Prometheus.Interfaces;
 using Promitor.Integrations.AzureMonitor;
 
 namespace Promitor.Core.Scraping
@@ -19,8 +18,9 @@ namespace Promitor.Core.Scraping
     public abstract class Scraper<TResourceDefinition> : IScraper<IAzureResourceDefinition>
       where TResourceDefinition : class, IAzureResourceDefinition
     {
-        private readonly ILogger _logger;
         private readonly IPrometheusMetricWriter _prometheusMetricWriter;
+        private readonly MetricSinkWriter _metricSinkWriter;
+        private readonly ILogger _logger;
 
         /// <summary>
         ///     Constructor
@@ -30,16 +30,11 @@ namespace Promitor.Core.Scraping
             Guard.NotNull(scraperConfiguration, nameof(scraperConfiguration));
 
             _logger = scraperConfiguration.Logger;
+            _metricSinkWriter = scraperConfiguration.MetricSinkWriter;
             _prometheusMetricWriter = scraperConfiguration.PrometheusMetricWriter;
 
-            AzureMetadata = scraperConfiguration.AzureMetadata;
             AzureMonitorClient = scraperConfiguration.AzureMonitorClient;
         }
-
-        /// <summary>
-        ///     Metadata concerning the Azure resources
-        /// </summary>
-        protected AzureMetadata AzureMetadata { get; }
 
         /// <summary>
         ///     Client to interact with Azure Monitor
@@ -69,7 +64,7 @@ namespace Promitor.Core.Scraping
 
                 var aggregationType = scrapeDefinition.AzureMetricConfiguration.Aggregation.Type;
                 var scrapedMetricResult = await ScrapeResourceAsync(
-                    AzureMetadata.SubscriptionId,
+                    scrapeDefinition.SubscriptionId,
                     scrapeDefinition,
                     castedMetricDefinition,
                     aggregationType,
@@ -77,6 +72,7 @@ namespace Promitor.Core.Scraping
 
                 LogMeasuredMetrics(scrapeDefinition, scrapedMetricResult, aggregationInterval);
 
+                await _metricSinkWriter.ReportMetricAsync(scrapeDefinition.PrometheusMetricDefinition.Name, scrapeDefinition.PrometheusMetricDefinition.Description, scrapedMetricResult);
                 _prometheusMetricWriter.ReportMetric(scrapeDefinition.PrometheusMetricDefinition, scrapedMetricResult);
             }
             catch (ErrorResponseException errorResponseException)

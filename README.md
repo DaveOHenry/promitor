@@ -3,7 +3,7 @@
 <!-- markdownlint-disable -->
 <p align=center><img src="./docs/media/logos/promitor.png" alt="Promitor Logo" height="150"></p>
 
-<h1 align="center">Azure Monitor Scraper for Prometheus</h1>
+<h1 align="center">Bringing Azure Monitor metrics where you need them.</h1>
 
 <p align="center">
     <a href="./LICENSE" rel="nofollow"><img src="https://img.shields.io/github/license/mashape/apistatus.svg?style=flat-square" alt="License"></a>
@@ -14,7 +14,7 @@
 <a href="https://github.com/users/tomkerkhove/sponsorship" rel="nofollow"><img src="https://img.shields.io/badge/Donate%20via-GitHub-blue.svg?style=flat-square" alt="Donate"></a>
 </p>
 
-**Promitor** is an **Azure Monitor scraper for Prometheus** providing a scraping endpoint for Prometheus that provides a configured subset of Azure Monitor metrics.
+**Promitor** is an Azure Monitor scraper which makes the metrics available through a scraping endpoint for Prometheus or push to a StatsD server.
 <!-- markdownlint-enable -->
 
 <!-- markdownlint-disable MD002 -->
@@ -28,6 +28,9 @@ All documentation is available on [promitor.io](https://promitor.io)
 We are proud to have the following customer(s) running Promitor in production:
 
 ![Walmart Labs](./docs/media/logos/customers/walmart-labs.jpg)
+![ResDiary](./docs/media/logos/customers/resdiary.png)
+
+Are you a Promitor user? Let us know and [get listed](https://forms.gle/hjcpaaVFa1A1hZaK6)!
 
 ## Contribution
 
@@ -43,6 +46,10 @@ Information about making changes to Promitor can be found [here](development-gui
 
 Learn more about our support options [here](https://github.com/tomkerkhove/promitor/blob/master/SUPPORT.md).
 
+Thanks for those who are supporting us via [GitHub Sponsors](https://github.com/sponsors/tomkerkhove/).
+
+[![Sam Vanhoutte](./media/supporters/samvanhoutte.png)](https://github.com/samvanhoutte)
+
 ## Security
 
 Learn more about our security policy [here](https://github.com/tomkerkhove/promitor/security/policy).
@@ -57,7 +64,7 @@ you can do a small donation.
 ## Get in touch
 
 Do you have a security issue to report or just want to privately contact me? Feel
-free to [write me an email](mailto:kerkhove.tom@gmail.com)
+free to [write me an email](mailto:kerkhove.tom@gmail.com) or [get listed as a user](https://forms.gle/hjcpaaVFa1A1hZaK6).
 
 ## Thank you
 

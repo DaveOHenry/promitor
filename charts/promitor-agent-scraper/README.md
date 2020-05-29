@@ -60,6 +60,9 @@ their default values.
 | `image.pullPolicy`  | Policy to pull image | `Always`            |
 | `azureAuthentication.appId`  | Id of the Azure AD entity to authenticate with |             |
 | `azureAuthentication.appKey`  | Secret of the Azure AD entity to authenticate with |             |
+| `metricSinks.statsd.host`  | DNS name or IP address of StatsD server |             |
+| `metricSinks.statsd.port`  | Port (UDP) address of StatsD server | `8125`            |
+| `metricSinks.statsd.metricPrefix`  | Prefix that will be added to every metric defined in the metric declaration |             |
 | `prometheus.scrapeEndpointPath`  | Path where the scraping endpoint for Prometheus is being exposed | `/metrics`            |
 | `prometheus.enableMetricTimestamps`  | Indication wheter or not to include timestamp | `true`            |
 | `prometheus.metricUnavailableValue`  | Value to report in Prometheus when no metric was found wheter or not to include timestamp | `NaN`            |
@@ -85,6 +88,11 @@ their default values.
 | `metricDefaults.aggregation.interval`  | Default interval which defines over what period measurements of a metric should be aggregated | `00:05:00`            |
 | `metricDefaults.scraping.schedule`  | Cron expression that controls the fequency in which all the configured metrics will be scraped from Azure Monitor | `*/5 * * * *`            |
 | `metrics`  | List of metrics to scrape configured following the [metric declaration docs](https://promitor.io/configuration/metrics/) |        |
+| `rbac.create` | If true, create & use RBAC resources | `true` |
+| `rbac.podSecurityPolicyEnabled` | Create pod security policy resources | `false` |
+| `rbac.serviceAccount.create` | Create service account resource | `true` |
+| `rbac.serviceAccount.name` | Service account name to use if create is false. If create is true, a name is generated using the fullname template | `default` |
+| `rbac.serviceAccount.annotations` | Service account annotations| `{}` |
 | `resources`  | Pod resource requests & limits |    `{}`    |
 | `secrets.createSecret`  | Indication if you want to bring your own secret level of logging | `true`            |
 | `secrets.appIdSecret`  | Name of the secret for Azure AD identity id | `azure-app-id`            |

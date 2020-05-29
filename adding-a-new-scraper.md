@@ -27,7 +27,8 @@ discuss your scenario_
 5. Update `Promitor.Core.Scraping.Configuration.v1.Core.AzureResourceDeserializerFactory`
   to handle your new resource type by returning a new instance of the Deserializer
   you created in the previous step.
-6. Provide a unit test in `.\src\Promitor.Scraper.Tests.Unit\Serialization\v1\Providers`
+6. Update the `Promitor.Core.Scraping.Configuration.Serialization.v1.Mapping.V1MappingProfile` to handle your new resource type by mapping the `<New-Type>ResourceV1` to `<New-Type>ResourceDefinition`
+7. Provide a unit test in `.\src\Promitor.Tests.Unit\Serialization\v1\Providers`
   that tests the deserialization based on our sample. Your test class must inherit
   from `ResourceDeserializerTest` to ensure the inherited functionality is tested.
 
@@ -42,12 +43,12 @@ fails to start up.
 This requires the following steps:
 
 1. Create a new validator that implements `IMetricValidator`. This validator should
-  reside in `.\src\Promitor.Scraper.Host\Validation\MetricDefinitions\ResourceTypes`.
+  reside in `.\src\Promitor.Agents.Scraper\Validation\MetricDefinitions\ResourceTypes`.
   You can look at the contents of `ServiceBusQueueMetricValidator` for an idea of
   the validation inputs, steps, and outputs typical of validator implementation.
-2. Add construction and usage of this validator to `.\src\Promitor.Scraper.Host\Validation\Factories\MetricValidatorFactory.cs`
+2. Add construction and usage of this validator to `.\src\Promitor.Agents.Scraper\Validation\Factories\MetricValidatorFactory.cs`
   for the ResourceType you created in step #1 above.
-3. Provide a unit test for every validation rule that was added in `.\src\Promitor.Scraper.Tests.Unit\Validation\Metrics\ResourceTypes`
+3. Provide a unit test for every validation rule that was added in `.\src\Promitor.Tests.Unit\Validation\Metrics\ResourceTypes`
 
 ## Scraping
 
@@ -74,4 +75,5 @@ Please provide documentation on the following:
 2. What fields need to be configured and what they are for.
 3. An example configuration.
 
-This should be provided in a new file under `docs\configuration\metrics`.
+This should be provided in a new file under `docs\configuration\v1.x\metrics` and be listed
+under the supported providers on `docs/configuration/v1.x/metrics/index.md` in alphabetical order.

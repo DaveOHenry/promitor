@@ -1,10 +1,9 @@
 ---
-title: "(2018-09-15)"
-date: 2018-09-02T20:46:47+02:00
 weight: 1
 version:
 ---
 
-- {{% tag added %}} Support Prometheus service discovery in Helm chart ([#861](https://github.com/tomkerkhove/promitor/issues/861))
-- {{% tag added %}} Capability to gain insights on Azure Monitor integration ([docs](http://promitor.io/operations/#azure-monitor-integration) | [#848](https://github.com/tomkerkhove/promitor/issues/848))
-- {{% tag added %}} Improve metrics configuration validation ([#592](https://github.com/tomkerkhove/promitor/issues/592))
+- {{% tag fixed %}} Runtime config for metrics sinks is not working correctly ([#1052](https://github.com/tomkerkhove/promitor/issues/1052))
+- {{% tag removed %}} Default Prometheus configuration since we have multiple metric sinks nowadays. We are removing
+ this since you cannot have duplicate Prometheus scraping endpoints. If you omit legacy configuration it will use
+  `/metrics` as a default value which forces you to use different endpoint in the Prometheus metric sink.

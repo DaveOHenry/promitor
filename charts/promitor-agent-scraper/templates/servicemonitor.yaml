@@ -16,8 +16,8 @@ spec:
 {{- if .Values.prometheus.operator.serviceMonitor.interval }}
     interval: {{ .Values.prometheus.operator.serviceMonitor.interval }}
 {{- end }}
-{{- if .Values.prometheus.scrapeEndpointPath }}
-    path: {{ .Values.prometheus.scrapeEndpointPath }}
+{{- if .Values.metricSinks.prometheusScrapingEndpoint.baseUriPath }}
+    path: {{ .Values.metricSinks.prometheusScrapingEndpoint.baseUriPath }}
 {{- end }}
 {{- if .Values.prometheus.operator.serviceMonitor.timeout }}
     scrapeTimeout: {{ .Values.prometheus.operator.serviceMonitor.timeout }}

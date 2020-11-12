@@ -1,88 +1,84 @@
-﻿using System.Linq;
-using System.Threading.Tasks;
+﻿using GuardNet;
 using JustEat.StatsD;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
+using Prometheus.Client.DependencyInjection;
 using Promitor.Agents.Core.Configuration.Server;
 using Promitor.Agents.Core.Configuration.Telemetry;
 using Promitor.Agents.Core.Configuration.Telemetry.Sinks;
+using Promitor.Agents.Core.Validation;
+using Promitor.Agents.Core.Validation.Interfaces;
+using Promitor.Agents.Core.Validation.Steps;
+using Promitor.Agents.Scraper;
 using Promitor.Agents.Scraper.Configuration;
 using Promitor.Agents.Scraper.Configuration.Sinks;
 using Promitor.Agents.Scraper.Discovery;
+using Promitor.Agents.Scraper.Validation.Steps;
+using Promitor.Agents.Scraper.Validation.Steps.Sinks;
+using Promitor.Core;
+using Promitor.Core.Metrics;
+using Promitor.Core.Metrics.Sinks;
 using Promitor.Core.Scraping.Configuration.Providers;
 using Promitor.Core.Scraping.Configuration.Providers.Interfaces;
+using Promitor.Core.Scraping.Configuration.Runtime;
 using Promitor.Core.Scraping.Configuration.Serialization;
 using Promitor.Core.Scraping.Configuration.Serialization.v1.Core;
 using Promitor.Core.Scraping.Configuration.Serialization.v1.Model;
 using Promitor.Core.Scraping.Factories;
-using Promitor.Agents.Scraper.Scheduling;
-using Promitor.Agents.Scraper.Validation;
-using Promitor.Core.Metrics;
-using Promitor.Core.Metrics.Sinks;
-using Promitor.Core.Scraping.Configuration.Runtime;
-using Promitor.Core.Scraping.Interfaces;
 using Promitor.Integrations.AzureMonitor.Configuration;
+using Promitor.Integrations.Sinks.Atlassian.Statuspage;
+using Promitor.Integrations.Sinks.Atlassian.Statuspage.Configuration;
 using Promitor.Integrations.Sinks.Prometheus;
 using Promitor.Integrations.Sinks.Prometheus.Configuration;
 using Promitor.Integrations.Sinks.Statsd;
 using Promitor.Integrations.Sinks.Statsd.Configuration;
 
 // ReSharper disable once CheckNamespace
-namespace Promitor.Agents.Scraper.Extensions
+namespace Microsoft.Extensions.DependencyInjection
 {
     // ReSharper disable once InconsistentNaming
     public static class IServiceCollectionExtensions
     {
         /// <summary>
-        ///     Defines to use the cron scheduler
+        ///     Add the Promitor Resource Discovery client
         /// </summary>
         /// <param name="services">Collections of services in application</param>
-        public static IServiceCollection ScheduleMetricScraping(this IServiceCollection services)
+        /// <param name="promitorUserAgent">User agent for Promitor</param>
+        public static IServiceCollection AddResourceDiscoveryClient(this IServiceCollection services, string promitorUserAgent)
         {
-            var serviceProviderToCreateJobsWith = services.BuildServiceProvider();
-            var metricsProvider = serviceProviderToCreateJobsWith.GetService<IMetricsDeclarationProvider>();
-            var metrics = metricsProvider.Get(applyDefaults: true);
+            Guard.NotNull(services, nameof(services));
 
-            var loggerFactory = serviceProviderToCreateJobsWith.GetService<ILoggerFactory>();
-            var metricSinkWriter = serviceProviderToCreateJobsWith.GetRequiredService<MetricSinkWriter>();
-            var azureMonitorLoggingConfiguration = serviceProviderToCreateJobsWith.GetService<IOptions<AzureMonitorLoggingConfiguration>>();
-            var configuration = serviceProviderToCreateJobsWith.GetService<IConfiguration>();
-            var runtimeMetricCollector = serviceProviderToCreateJobsWith.GetService<IRuntimeMetricsCollector>();
-            var azureMonitorClientFactory = serviceProviderToCreateJobsWith.GetRequiredService<AzureMonitorClientFactory>();
-
-            foreach (var metric in metrics.Metrics)
+            services.AddHttpClient<ResourceDiscoveryClient>(client =>
             {
-                foreach (var resource in metric.Resources)
-                {
-                    var resourceSubscriptionId = string.IsNullOrWhiteSpace(resource.SubscriptionId) ? metrics.AzureMetadata.SubscriptionId : resource.SubscriptionId;
-                    var azureMonitorClient = azureMonitorClientFactory.CreateIfNotExists(metrics.AzureMetadata.Cloud, metrics.AzureMetadata.TenantId, resourceSubscriptionId, metricSinkWriter, runtimeMetricCollector, configuration, azureMonitorLoggingConfiguration, loggerFactory);
-                    var scrapeDefinition = metric.CreateScrapeDefinition(resource, metrics.AzureMetadata);
+                // Provide Promitor User-Agent
+                client.DefaultRequestHeaders.UserAgent.TryParseAdd(promitorUserAgent);
+            });
+            services.AddTransient<ResourceDiscoveryRepository>();
 
-                    var jobName = $"{scrapeDefinition.SubscriptionId}-{scrapeDefinition.PrometheusMetricDefinition.Name}";
+            return services;
+        }
 
-                    services.AddScheduler(builder =>
-                    {
-                        builder.AddJob(jobServices =>
-                        {
-                            return new MetricScrapingJob(jobName, scrapeDefinition,
-                                metricSinkWriter,
-                                jobServices.GetService<IPrometheusMetricWriter>(),
-                                jobServices.GetService<MetricScraperFactory>(),
-                                azureMonitorClient,
-                                jobServices.GetService<ILogger<MetricScrapingJob>>());
-                        }, schedulerOptions =>
-                        {
-                            schedulerOptions.CronSchedule = scrapeDefinition.Scraping.Schedule;
-                            schedulerOptions.RunImmediately = true;
-                        },
-                        jobName: jobName);
-                        builder.UnobservedTaskExceptionHandler = (sender, exceptionEventArgs) => UnobservedJobHandlerHandler(sender, exceptionEventArgs, services);
-                    });
-                }
-            }
+        /// <summary>
+        ///     Add the Atlassian Statuspage client
+        /// </summary>
+        /// <param name="services">Collections of services in application</param>
+        /// <param name="promitorUserAgent">User agent for Promitor</param>
+        /// <param name="configuration">Configuration of the agent</param>
+        public static IServiceCollection AddAtlassianStatuspageClient(this IServiceCollection services, string promitorUserAgent, IConfiguration configuration)
+        {
+            Guard.NotNull(services, nameof(services));
+
+            services.AddHttpClient<IAtlassianStatuspageClient, AtlassianStatuspageClient>(client =>
+            {
+                // Provide Promitor User-Agent
+                client.DefaultRequestHeaders.UserAgent.TryParseAdd(promitorUserAgent);
+
+                // Auth all requests
+                var apiKey = configuration[EnvironmentVariables.Integrations.AtlassianStatuspage.ApiKey];
+                client.DefaultRequestHeaders.Add("Authorization", $"OAuth {apiKey}");
+            });
+            services.AddTransient<ResourceDiscoveryRepository>();
 
             return services;
         }
@@ -93,13 +89,11 @@ namespace Promitor.Agents.Scraper.Extensions
         /// <param name="services">Collections of services in application</param>
         public static IServiceCollection DefineDependencies(this IServiceCollection services)
         {
-            services.AddTransient<ResourceDiscoveryClient>();
-            services.AddTransient<ResourceDiscoveryRepository>();
+            Guard.NotNull(services, nameof(services));
+
             services.AddTransient<IMetricsDeclarationProvider, MetricsDeclarationProvider>();
             services.AddTransient<IRuntimeMetricsCollector, RuntimeMetricsCollector>();
             services.AddTransient<MetricScraperFactory>();
-            services.AddTransient<RuntimeValidator>();
-            services.AddTransient<IPrometheusMetricWriter, PrometheusMetricWriter>();
             services.AddTransient<ConfigurationSerializer>();
             services.AddSingleton<AzureMonitorClientFactory>();
 
@@ -111,9 +105,28 @@ namespace Promitor.Agents.Scraper.Extensions
             services.AddSingleton<IDeserializer<MetricDimensionV1>, MetricDimensionDeserializer>();
             services.AddSingleton<IDeserializer<ScrapingV1>, ScrapingDeserializer>();
             services.AddSingleton<IDeserializer<AzureMetricConfigurationV1>, AzureMetricConfigurationDeserializer>();
+            services.AddSingleton<IDeserializer<AzureResourceDiscoveryGroupDefinitionV1>, AzureResourceDiscoveryGroupDeserializer>();
             services.AddSingleton<IAzureResourceDeserializerFactory, AzureResourceDeserializerFactory>();
             services.AddSingleton<IDeserializer<MetricAggregationV1>, MetricAggregationDeserializer>();
             services.AddSingleton<IDeserializer<SecretV1>, SecretDeserializer>();
+
+            return services;
+        }
+
+        /// <summary>
+        ///     Defines the validation for when Promitor starts up
+        /// </summary>
+        /// <param name="services">Collections of services in application</param>
+        public static IServiceCollection AddValidationRules(this IServiceCollection services)
+        {
+            services.AddTransient<IValidationStep, ConfigurationPathValidationStep>();
+            services.AddTransient<IValidationStep, AzureAuthenticationValidationStep>();
+            services.AddTransient<IValidationStep, MetricsDeclarationValidationStep>();
+            services.AddTransient<IValidationStep, ResourceDiscoveryValidationStep>();
+            services.AddTransient<IValidationStep, StatsDMetricSinkValidationStep>();
+            services.AddTransient<IValidationStep, PrometheusScrapingEndpointMetricSinkValidationStep>();
+            services.AddTransient<IValidationStep, AtlassianStatuspageMetricSinkValidationStep>();
+            services.AddTransient<RuntimeValidator>();
 
             return services;
         }
@@ -136,6 +149,11 @@ namespace Promitor.Agents.Scraper.Extensions
                 AddPrometheusMetricSink(services);
             }
 
+            if (metricSinkConfiguration?.AtlassianStatuspage != null)
+            {
+                AddAtlassianStatuspageMetricSink(services);
+            }
+
             services.TryAddSingleton<MetricSinkWriter>();
 
             return services;
@@ -143,7 +161,13 @@ namespace Promitor.Agents.Scraper.Extensions
 
         private static void AddPrometheusMetricSink(IServiceCollection services)
         {
+            services.AddMetricFactory();
             services.AddTransient<IMetricSink, PrometheusScrapingEndpointMetricSink>();
+        }
+
+        private static void AddAtlassianStatuspageMetricSink(IServiceCollection services)
+        {
+            services.AddTransient<IMetricSink, AtlassianStatuspageMetricSink>();
         }
 
         private static void AddStatsdMetricSink(IServiceCollection services, StatsdSinkConfiguration statsdConfiguration)
@@ -181,7 +205,9 @@ namespace Promitor.Agents.Scraper.Extensions
             services.Configure<ResourceDiscoveryConfiguration>(configuration.GetSection("resourceDiscovery"));
             services.Configure<TelemetryConfiguration>(configuration.GetSection("telemetry"));
             services.Configure<ServerConfiguration>(configuration.GetSection("server"));
-            services.Configure<PrometheusScrapingEndpointSinkConfiguration>(configuration.GetSection("prometheus"));
+            services.Configure<PrometheusScrapingEndpointSinkConfiguration>(configuration.GetSection("metricSinks:prometheusScrapingEndpoint"));
+            services.Configure<StatsdSinkConfiguration>(configuration.GetSection("metricSinks:statsd"));
+            services.Configure<AtlassianStatusPageSinkConfiguration>(configuration.GetSection("metricSinks:atlassianStatuspage"));
             services.Configure<ApplicationInsightsConfiguration>(configuration.GetSection("telemetry:applicationInsights"));
             services.Configure<ContainerLogConfiguration>(configuration.GetSection("telemetry:containerLogs"));
             services.Configure<ScrapeEndpointConfiguration>(configuration.GetSection("prometheus:scrapeEndpoint"));
@@ -189,16 +215,6 @@ namespace Promitor.Agents.Scraper.Extensions
             services.Configure<AzureMonitorLoggingConfiguration>(configuration.GetSection("azureMonitor:logging"));
 
             return services;
-        }
-
-        // ReSharper disable once UnusedParameter.Local
-        private static void UnobservedJobHandlerHandler(object sender, UnobservedTaskExceptionEventArgs e, IServiceCollection services)
-        {
-            var logger = services.FirstOrDefault(service => service.ServiceType == typeof(ILogger));
-            var loggerInstance = (ILogger)logger?.ImplementationInstance;
-            loggerInstance?.LogCritical(e.Exception, "Unhandled job exception");
-
-            e.SetObserved();
         }
     }
 }

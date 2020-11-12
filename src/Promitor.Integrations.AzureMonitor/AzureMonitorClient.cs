@@ -68,6 +68,7 @@ namespace Promitor.Integrations.AzureMonitor
             Guard.NotNullOrWhitespace(resourceId, nameof(resourceId));
 
             // Get all metrics
+            var startQueryingTime = DateTime.UtcNow;
             var metricsDefinitions = await _authenticatedAzureSubscription.MetricDefinitions.ListByResourceAsync(resourceId);
             var metricDefinition = metricsDefinitions.SingleOrDefault(definition => definition.Name.Value.ToUpper() == metricName.ToUpper());
             if (metricDefinition == null)
@@ -75,12 +76,10 @@ namespace Promitor.Integrations.AzureMonitor
                 throw new MetricNotFoundException(metricName);
             }
 
-            var recordDateTime = DateTime.UtcNow;
-
             var closestAggregationInterval = DetermineAggregationInterval(metricName, aggregationInterval, metricDefinition.MetricAvailabilities);
 
             // Get the most recent metric
-            var relevantMetric = await GetRelevantMetric(metricName, aggregationType, closestAggregationInterval, metricFilter, metricDimension, metricDefinition, recordDateTime);
+            var relevantMetric = await GetRelevantMetric(metricName, aggregationType, closestAggregationInterval, metricFilter, metricDimension, metricDefinition, startQueryingTime);
             if (relevantMetric.Timeseries.Count < 1)
             {
                 throw new MetricInformationNotFoundException(metricName, "No time series was found");
@@ -89,12 +88,15 @@ namespace Promitor.Integrations.AzureMonitor
             var measuredMetrics = new List<MeasuredMetric>();
             foreach (var timeseries in relevantMetric.Timeseries)
             {
-                // Get the most recent value for that metric
-                var mostRecentMetricValue = GetMostRecentMetricValue(metricName, timeseries, recordDateTime);
+                // Get the most recent value for that metric, that has a finished time series
+                // We need to shift the time to ensure that the time series is finalized and not report invalid values
+                var maxTimeSeriesTime = startQueryingTime.AddMinutes(closestAggregationInterval.TotalMinutes);
+
+                var mostRecentMetricValue = GetMostRecentMetricValue(metricName, timeseries, maxTimeSeriesTime);
 
                 // Get the metric value according to the requested aggregation type
                 var requestedMetricAggregate = InterpretMetricValue(aggregationType, mostRecentMetricValue);
-
+            
                 var measuredMetric = string.IsNullOrWhiteSpace(metricDimension) ? MeasuredMetric.CreateWithoutDimension(requestedMetricAggregate) : MeasuredMetric.CreateForDimension(requestedMetricAggregate, metricDimension, timeseries);
                 measuredMetrics.Add(measuredMetric);
             }
@@ -166,7 +168,7 @@ namespace Promitor.Integrations.AzureMonitor
 
             if (relevantMetricValue == null)
             {
-                throw new MetricInformationNotFoundException(metricName, "No time series entry was found");
+                throw new MetricInformationNotFoundException(metricName, $"No time series entry was found recorded before {recordDateTime}");
             }
 
             return relevantMetricValue;
@@ -204,7 +206,8 @@ namespace Promitor.Integrations.AzureMonitor
 
             if (string.IsNullOrWhiteSpace(metricFilter) == false)
             {
-                metricQuery.WithOdataFilter(metricFilter);
+                var filter = metricFilter.Replace("/", "%2F");
+                metricQuery.WithOdataFilter(filter);
             }
 
             if (string.IsNullOrWhiteSpace(metricDimension) == false)

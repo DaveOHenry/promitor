@@ -8,23 +8,32 @@ fullnameOverride: ""
 
 image:
   repository: tomkerkhove/promitor-agent-scraper
-  tag: 1.0.0
   pullPolicy: Always
+  tag:
 
 azureAuthentication:
   appId: ""
   appKey: ""
 metricSinks:
-  useStatsd: false
+  atlassianStatuspage:
+    enabled: false
+    pageId: ""
+    apiKey: ""
+    systemMetricMapping: []
+    # - id: <atlassian-statuspage-system-metric-id>
+    #   promitorMetricName: <promitor-metric-name>
+  prometheusScrapingEndpoint:
+    enabled: true
+    baseUriPath: /metrics
+    enableMetricTimestamps: true
+    metricUnavailableValue: NaN
+    enableServiceDiscovery: true
   statsd:
+    enabled: false
     host: ""
     port: 8125
     metricPrefix: ""
 prometheus:
-  scrapeEndpointPath: /metrics
-  enableMetricTimestamps: True
-  metricUnavailableValue: NaN
-  enableServiceDiscovery: True
   operator:
     serviceMonitor:
       enabled: false
@@ -47,14 +56,18 @@ prometheus:
         #     description: Service {{ template "promitor_agent_scraper.fullname" . }} currently reports {{ "{{ $value }}" }} 
         #     summary: my_metric value is {{ "{{ $value }}" }}
 
+resourceDiscovery:
+  enabled: false
+  host: ""
+  port: 80
 telemetry:
   defaultLogLevel: "Error"
   applicationInsights:
-    enabled: False
+    enabled: false
     key: ""
     logLevel: ""
   containerLogs:
-    enabled: True
+    enabled: true
     logLevel: ""
 
 ## Metric Declaration YAML
@@ -83,18 +96,20 @@ metrics: []
 
 secrets:
   # To use your own secret, set createSecret to false and define the name/keys that your secret uses
-  createSecret: True
+  createSecret: true
   secretName: ""
   appIdSecret: azure-app-id
   appKeySecret: azure-app-key
-  appInsightsSecret: azure-appinsights-key
+  atlassianStatuspageApiKey: atlassian-statuspage-apikey
 
 service:
-  exposeExternally: False
   port: 8888
   targetPort: 88
   labelType: infrastructure
   selectorType: runtime
+  loadBalancer:
+    dnsPrefix:
+    enabled: false
 
 resources: {}
   # limits:
@@ -122,5 +137,5 @@ rbac:
 
     ## The name of the service account to use if create is false
     ## If create is true, a name is generated using the fullname template
-    name: default
+    name: promitor-scraper
     annotations: {}

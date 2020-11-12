@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using Promitor.Core.Contracts;
 
 namespace Promitor.Core.Scraping.Configuration.Model.Metrics
 {
@@ -42,6 +43,11 @@ namespace Promitor.Core.Scraping.Configuration.Model.Metrics
         public ResourceType ResourceType { get; set; }
 
         /// <summary>
+        /// Gets or sets the list of resource collections to discover resources with.
+        /// </summary>
+        public List<AzureResourceDiscoveryGroup> ResourceDiscoveryGroups { get; set; }
+
+        /// <summary>
         /// Gets or sets the list of resources to scrape.
         /// </summary>
         public List<IAzureResourceDefinition> Resources { get; set; }
@@ -54,6 +60,7 @@ namespace Promitor.Core.Scraping.Configuration.Model.Metrics
         /// <returns>The scrape definition.</returns>
         public ScrapeDefinition<IAzureResourceDefinition> CreateScrapeDefinition(IAzureResourceDefinition resource, AzureMetadata azureMetadata)
         {
+            // TODO: Verify if this logic is valid as we always use defaults? 🤔
             return new ScrapeDefinition<IAzureResourceDefinition>(
                 AzureMetricConfiguration,
                 PrometheusMetricDefinition,

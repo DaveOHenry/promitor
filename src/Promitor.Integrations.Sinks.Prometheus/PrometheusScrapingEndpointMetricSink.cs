@@ -1,10 +1,11 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using GuardNet;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Prometheus.Client;
+using Prometheus.Client.Abstractions;
 using Promitor.Core;
 using Promitor.Core.Metrics;
 using Promitor.Core.Metrics.Sinks;
@@ -16,15 +17,18 @@ namespace Promitor.Integrations.Sinks.Prometheus
 {
     public class PrometheusScrapingEndpointMetricSink : IMetricSink
     {
+        private readonly IMetricFactory _metricFactory;
         private readonly ILogger<PrometheusScrapingEndpointMetricSink> _logger;
         private readonly IMetricsDeclarationProvider _metricsDeclarationProvider;
         private readonly IOptionsMonitor<PrometheusScrapingEndpointSinkConfiguration> _prometheusConfiguration;
 
-        public PrometheusScrapingEndpointMetricSink(IMetricsDeclarationProvider metricsDeclarationProvider, IOptionsMonitor<PrometheusScrapingEndpointSinkConfiguration> prometheusConfiguration, ILogger<PrometheusScrapingEndpointMetricSink> logger)
+        public PrometheusScrapingEndpointMetricSink(IMetricFactory metricFactory, IMetricsDeclarationProvider metricsDeclarationProvider, IOptionsMonitor<PrometheusScrapingEndpointSinkConfiguration> prometheusConfiguration, ILogger<PrometheusScrapingEndpointMetricSink> logger)
         {
+            Guard.NotNull(metricFactory, nameof(metricFactory));
             Guard.NotNull(prometheusConfiguration, nameof(prometheusConfiguration));
             Guard.NotNull(logger, nameof(logger));
 
+            _metricFactory = metricFactory;
             _metricsDeclarationProvider = metricsDeclarationProvider;
             _prometheusConfiguration = prometheusConfiguration;
             _logger = logger;
@@ -42,7 +46,7 @@ namespace Promitor.Integrations.Sinks.Prometheus
 
             foreach (var measuredMetric in scrapeResult.MetricValues)
             {
-                var metricValue = measuredMetric.Value ?? 0;
+                var metricValue = DetermineMetricMeasurement(measuredMetric);
                 var metricDefinition = _metricsDeclarationProvider.GetPrometheusDefinition(metricName);
 
                 var metricLabels = DetermineLabels(metricDefinition, scrapeResult, measuredMetric);
@@ -54,13 +58,19 @@ namespace Promitor.Integrations.Sinks.Prometheus
             await Task.WhenAll(reportMetricTasks);
         }
 
+        private double DetermineMetricMeasurement(MeasuredMetric scrapedMetricResult)
+        {
+            var metricUnavailableValue = _prometheusConfiguration.CurrentValue?.MetricUnavailableValue ?? Defaults.Prometheus.MetricUnavailableValue;
+            return scrapedMetricResult.Value ?? metricUnavailableValue;
+        }
+
         public Task ReportMetricAsync(string metricName, string metricDescription, double metricValue, Dictionary<string, string> labels)
         {
             Guard.NotNullOrEmpty(metricName, nameof(metricName));
 
             var enableMetricTimestamps = _prometheusConfiguration.CurrentValue.EnableMetricTimestamps;
-
-            var gauge = Metrics.CreateGauge(metricName, metricDescription, includeTimestamp: enableMetricTimestamps, labelNames: labels.Keys.ToArray());
+            
+            var gauge = CreateGauge(metricName, metricDescription, labels, enableMetricTimestamps);
             gauge.WithLabels(labels.Values.ToArray()).Set(metricValue);
 
             _logger.LogTrace("Metric {MetricName} with value {MetricValue} was written to StatsD server", metricName, metricValue);
@@ -68,26 +78,33 @@ namespace Promitor.Integrations.Sinks.Prometheus
             return Task.CompletedTask;
         }
 
+        private IMetricFamily<IGauge> CreateGauge(string metricName, string metricDescription, Dictionary<string, string> labels, bool enableMetricTimestamps)
+        {
+            var gauge = _metricFactory.CreateGauge(metricName, metricDescription, includeTimestamp: enableMetricTimestamps, labelNames: labels.Keys.ToArray());
+            return gauge;
+        }
+
         private Dictionary<string, string> DetermineLabels(PrometheusMetricDefinition metricDefinition, ScrapeResult scrapeResult, MeasuredMetric measuredMetric)
         {
-            var labels = new Dictionary<string, string>(scrapeResult.Labels);
+            var labels = new Dictionary<string, string>(scrapeResult.Labels.Select(label => new KeyValuePair<string, string>(label.Key.SanitizeForPrometheusLabelKey(), label.Value)));
 
             if (measuredMetric.IsDimensional)
             {
-                labels.Add(measuredMetric.DimensionName.ToLower(), measuredMetric.DimensionValue);
+                labels.Add(measuredMetric.DimensionName.SanitizeForPrometheusLabelKey(), measuredMetric.DimensionValue);
             }
 
             if (metricDefinition?.Labels?.Any() == true)
             {
                 foreach (var customLabel in metricDefinition.Labels)
                 {
-                    if (labels.ContainsKey(customLabel.Key))
+                    var customLabelKey = customLabel.Key.SanitizeForPrometheusLabelKey();
+                    if (labels.ContainsKey(customLabelKey))
                     {
-                        _logger.LogWarning("Custom label {CustomLabelName} was already specified with value 'LabelValue' instead of 'CustomLabelValue'. Ignoring...", customLabel.Key, labels[customLabel.Key], customLabel.Value);
+                        _logger.LogWarning("Custom label {CustomLabelName} was already specified with value 'LabelValue' instead of 'CustomLabelValue'. Ignoring...", customLabel.Key, labels[customLabelKey], customLabel.Value);
                         continue;
                     }
 
-                    labels.Add(customLabel.Key, customLabel.Value);
+                    labels.Add(customLabelKey, customLabel.Value);
                 }
             }
 

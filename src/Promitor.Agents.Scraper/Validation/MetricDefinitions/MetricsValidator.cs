@@ -4,6 +4,7 @@ using GuardNet;
 using Promitor.Core.Scraping.Configuration.Model;
 using Promitor.Core.Scraping.Configuration.Model.Metrics;
 using Promitor.Agents.Scraper.Validation.Factories;
+using Promitor.Core.Contracts;
 
 namespace Promitor.Agents.Scraper.Validation.MetricDefinitions
 {
@@ -49,11 +50,18 @@ namespace Promitor.Agents.Scraper.Validation.MetricDefinitions
                 errorMessages.Add("No metric name is configured");
             }
 
-            var metricDefinitionValidationErrors = MetricValidatorFactory
-                .GetValidatorFor(metric.ResourceType)
-                .Validate(metric);
+            if (metric.Resources?.Any() == false && metric.ResourceDiscoveryGroups?.Any() == false)
+            {
+                errorMessages.Add("No resource or resource collection is configured to be scraped");
+            }
+            else
+            {
+                var metricDefinitionValidationErrors = MetricValidatorFactory
+                    .GetValidatorFor(metric.ResourceType)
+                    .Validate(metric);
 
-            errorMessages.AddRange(metricDefinitionValidationErrors);
+                errorMessages.AddRange(metricDefinitionValidationErrors);
+            }
 
             var metricAggregationValidator = new AzureMetricConfigurationValidator(_metricDefaults);
             var metricsConfigurationErrorMessages = metricAggregationValidator.Validate(metric.AzureMetricConfiguration);

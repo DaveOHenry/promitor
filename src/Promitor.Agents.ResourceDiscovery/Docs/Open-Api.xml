@@ -39,21 +39,27 @@
             <response code="200">API is healthy</response>
             <response code="503">API is unhealthy or in degraded state</response>
         </member>
-        <member name="T:Promitor.Agents.ResourceDiscovery.Controllers.ResourceCollectionsController">
+        <member name="T:Promitor.Agents.ResourceDiscovery.Controllers.ResourceDiscoveryGroupsController">
             <summary>
-            API endpoint to interact with resource collections
+            API endpoint to interact with resource discovery groups
             </summary>
         </member>
-        <member name="M:Promitor.Agents.ResourceDiscovery.Controllers.ResourceCollectionsController.#ctor(Microsoft.Extensions.Options.IOptionsMonitor{Promitor.Agents.ResourceDiscovery.Configuration.ResourceDeclaration})">
+        <member name="M:Promitor.Agents.ResourceDiscovery.Controllers.ResourceDiscoveryGroupsController.#ctor(Microsoft.Extensions.Options.IOptionsMonitor{Promitor.Agents.ResourceDiscovery.Configuration.ResourceDeclaration})">
             <summary>
-                Initializes a new instance of the <see cref="T:Promitor.Agents.ResourceDiscovery.Controllers.DiscoveryController" /> class.
+                Initializes a new instance of the <see cref="T:Promitor.Agents.ResourceDiscovery.Controllers.ResourceDiscoveryGroupsController" /> class.
             </summary>
         </member>
-        <member name="M:Promitor.Agents.ResourceDiscovery.Controllers.ResourceCollectionsController.Get">
+        <member name="M:Promitor.Agents.ResourceDiscovery.Controllers.ResourceDiscoveryGroupsController.Get">
             <summary>
-                Get Resource Collections
+                Get Resource Discovery Groups
             </summary>
-            <remarks>Lists all available resource collections.</remarks>
+            <remarks>Lists all available resource discovery groups.</remarks>
+        </member>
+        <member name="M:Promitor.Agents.ResourceDiscovery.Controllers.SystemController.Get">
+            <summary>
+                Get System Info
+            </summary>
+            <remarks>Provides information concerning the Promitor Resource Discovery Agent</remarks>
         </member>
         <member name="P:Promitor.Agents.ResourceDiscovery.Graph.Exceptions.ParseException.QueryResponse">
             <summary>
@@ -66,7 +72,7 @@
             </summary>
             <param name="queryResponse">Response provided by Azure Resource Graph after running a query</param>
         </member>
-        <member name="M:Promitor.Agents.ResourceDiscovery.Repositories.ResourceRepository.#ctor(Promitor.Agents.ResourceDiscovery.Graph.AzureResourceGraph,Microsoft.Extensions.Options.IOptionsMonitor{Promitor.Agents.ResourceDiscovery.Configuration.ResourceDeclaration})">
+        <member name="M:Promitor.Agents.ResourceDiscovery.Repositories.ResourceRepository.#ctor(Promitor.Agents.ResourceDiscovery.Graph.AzureResourceGraph,Microsoft.Extensions.Options.IOptionsMonitor{Promitor.Agents.ResourceDiscovery.Configuration.ResourceDeclaration},Microsoft.Extensions.Logging.ILogger{Promitor.Agents.ResourceDiscovery.Repositories.ResourceRepository})">
             <summary>
                 Initializes a new instance of the <see cref="T:Promitor.Agents.ResourceDiscovery.Controllers.DiscoveryController" /> class.
             </summary>
@@ -75,7 +81,7 @@
             <summary>
                 Get resources that are part of a given resource collection
             </summary>
-            <param name="resourceCollectionName">Name of the resource collection</param>
+            <param name="resourceDiscoveryGroupName">Name of the resource collection</param>
         </member>
         <member name="M:Promitor.Agents.ResourceDiscovery.Startup.#ctor(Microsoft.Extensions.Configuration.IConfiguration)">
             <summary>
@@ -90,6 +96,11 @@
         <member name="M:Promitor.Agents.Scraper.Extensions.IServiceCollectionExtensions.AddAzureResourceGraph(Microsoft.Extensions.DependencyInjection.IServiceCollection,Microsoft.Extensions.Configuration.IConfiguration)">
             <summary>
                 Add Azure Resource Graph integration
+            </summary>
+        </member>
+        <member name="M:Promitor.Agents.Scraper.Extensions.IServiceCollectionExtensions.AddValidationRules(Microsoft.Extensions.DependencyInjection.IServiceCollection)">
+            <summary>
+                Add validation rules
             </summary>
         </member>
     </members>

@@ -1,8 +1,9 @@
 {{- $metrics := toYaml .Values.metrics -}}
+{{- $systemMetricMapping := toYaml .Values.metricSinks.atlassianStatuspage.systemMetricMapping -}}
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: config-map-{{ template "promitor-agent-scraper.fullname" . }}
+  name: config-map-{{ template "promitor-agent-scraper.name" . }}
   labels:
     app: {{ template "promitor-agent-scraper.name" . }}
     chart: {{ template "promitor-agent-scraper.chart" . }}
@@ -12,8 +13,13 @@ data:
   runtime.yaml: |-
       server:
         httpPort: {{ .Values.service.targetPort | quote }}
+  {{- if .Values.resourceDiscovery.enabled }}
+      resourceDiscovery:
+        host: {{ .Values.resourceDiscovery.host | quote }}
+        port: {{ .Values.resourceDiscovery.port }}
+  {{- end }}
       metricSinks:
-  {{- if .Values.metricSinks.statsd.host }}
+  {{- if .Values.metricSinks.statsd.enabled }}
         statsd:
           host: {{ .Values.metricSinks.statsd.host | quote }}
   {{- if .Values.metricSinks.statsd.port }}
@@ -23,10 +29,18 @@ data:
           metricPrefix: {{ .Values.metricSinks.statsd.metricPrefix | quote }}
   {{- end }}
   {{- end }}
+  {{- if .Values.metricSinks.prometheusScrapingEndpoint.enabled }}
         prometheusScrapingEndpoint:
-          metricUnavailableValue: {{ .Values.prometheus.metricUnavailableValue | quote }}
-          enableMetricTimestamps: {{ .Values.prometheus.enableMetricTimestamps | quote }}
-          baseUriPath: {{ .Values.prometheus.scrapeEndpointPath | quote }}
+          metricUnavailableValue: {{ .Values.metricSinks.prometheusScrapingEndpoint.metricUnavailableValue | quote }}
+          enableMetricTimestamps: {{ .Values.metricSinks.prometheusScrapingEndpoint.enableMetricTimestamps | quote }}
+          baseUriPath: {{ .Values.metricSinks.prometheusScrapingEndpoint.baseUriPath | quote }}
+  {{- end }}
+  {{- if .Values.metricSinks.atlassianStatuspage.enabled }}
+        atlassianStatuspage:
+          pageId: {{ .Values.metricSinks.atlassianStatuspage.pageId | quote }}
+          systemMetricMapping:
+{{ tpl $systemMetricMapping . | indent 10 }}
+  {{- end }}
       metricsConfiguration:
         absolutePath: /config/metrics-declaration.yaml
       telemetry:

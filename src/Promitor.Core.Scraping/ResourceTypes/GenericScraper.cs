@@ -1,5 +1,6 @@
-﻿using Promitor.Core.Scraping.Configuration.Model.Metrics;
-using Promitor.Core.Scraping.Configuration.Model.Metrics.ResourceTypes;
+﻿using Promitor.Core.Contracts;
+using Promitor.Core.Contracts.ResourceTypes;
+using Promitor.Core.Scraping.Configuration.Model.Metrics;
 
 namespace Promitor.Core.Scraping.ResourceTypes
 {
@@ -15,6 +16,11 @@ namespace Promitor.Core.Scraping.ResourceTypes
         protected override string BuildResourceUri(string subscriptionId, ScrapeDefinition<IAzureResourceDefinition> scrapeDefinition, GenericAzureResourceDefinition resource)
         {
             return string.Format(ResourceUriTemplate, subscriptionId, scrapeDefinition.ResourceGroupName, resource.ResourceUri);
+        }
+
+        protected override string DetermineMetricFilter(GenericAzureResourceDefinition resourceDefinition)
+        {
+            return resourceDefinition.Filter;
         }
     }
 }

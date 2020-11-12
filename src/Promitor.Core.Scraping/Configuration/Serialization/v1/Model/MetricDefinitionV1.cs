@@ -1,5 +1,5 @@
 ﻿using System.Collections.Generic;
-using Promitor.Core.Scraping.Configuration.Model;
+using Promitor.Core.Contracts;
 
 namespace Promitor.Core.Scraping.Configuration.Serialization.v1.Model
 {
@@ -38,6 +38,11 @@ namespace Promitor.Core.Scraping.Configuration.Serialization.v1.Model
         /// Allows a custom scraping schedule to be specified for the metric.
         /// </summary>
         public ScrapingV1 Scraping { get; set; }
+
+        /// <summary>
+        /// The resource collections to be scraped.
+        /// </summary>
+        public IReadOnlyCollection<AzureResourceDiscoveryGroupDefinitionV1> ResourceDiscoveryGroups { get; set; }
 
         /// <summary>
         /// The resources to be scraped.

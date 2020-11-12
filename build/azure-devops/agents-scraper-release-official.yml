@@ -3,6 +3,28 @@ resources:
 - repo: self
 trigger: none
 pr: none
+
+parameters:
+- name: releaseType
+  displayName: Release Type
+  type: string
+  default: Full
+  values:
+  - Full
+  - Preview
+- name: imageVersion
+  displayName: Image Version
+  type: string
+  default: 0.1.0
+- name: chartVersion
+  displayName: Helm Chart Version
+  type: string
+  default: 0.1.0
+- name: githubReleaseTitle
+  displayName: GitHub Release Title
+  type: string
+  default: Promitor Scraper v$(Image.Version)
+
 variables:
   - template: ./variables/build.yml
   - name: 'Image.Name'
@@ -13,9 +35,13 @@ variables:
     value: '$(Build.BuildNumber)'
   - name: 'Helm.App.Version'
     value: '$(Image.Version)'
-  # Release.Title is configured in the build definition as settable at queue time
-  # Image.Version is configured in the build definition as settable at queue time
-  # Helm.Chart.Version is configured in the build definition as settable at queue time
+  - name: 'Image.Version'
+    value: '${{ parameters.imageVersion }}'
+  - name: 'Helm.Chart.Version'
+    value: '${{ parameters.chartVersion }}'
+  - name: 'Release.Title'
+    value: '${{ parameters.githubReleaseTitle }}'
+
 stages:
 - stage: Init
   displayName: Prepare Release
@@ -25,14 +51,8 @@ stages:
      pool:
        vmImage: ubuntu-16.04
      steps:
-     - powershell: |
-        Write-Host "Determining '{major}.{minor}' for '$(Image.Version)'"
-        $index = "$(Image.Version)".IndexOf(".", 2);
-        $majorMinorVersion = "$(Image.Version)".Substring(0, $index);
-        Write-Host "Found version '$majorMinorVersion'"
-        Write-Output ("##vso[task.setvariable variable=Image.MajorMinorVersion;]$majorMinorVersion")
-       displayName: 'Determine ''{major}.{minor}'' version'
-     - template: ./../templates/persist-variable.yml
+     - template: templates/versioning/determine-major-minor-version.yml
+     - template: templates/utils/persist-variable.yml
        parameters:
           currentVariableName: 'Image.MajorMinorVersion'
           persistedVariableName: 'Image.MajorMinorVersion'
@@ -41,6 +61,28 @@ stages:
 - stage: Build
   dependsOn: Init
   displayName: Build and Push Docker image
+  variables:
+  - group: 'Agent Authentication'
+  - name: Container.Scraper.Name
+    value: 'promitor.scraper.agent'
+  - name: Container.Scraper.Port
+    value: 8999
+  - name: Container.ResourceDiscovery.Name
+    value: 'promitor.agents.resourcediscovery'
+  - name: Container.ResourceDiscovery.Port
+    value: '999'
+  - name: Container.Network.Name
+    value: 'ci-network'
+  - name: Image.ResourceDiscovery.Name
+    value: 'local/promitor-resource-discovery:dev'
+  - name: Agent.Scraper.Version
+    value: $(Image.Version)
+  - name: Agent.Scraper.BaseUrl
+    value: http://localhost:$(Container.Scraper.Port)
+  - name: Agent.ResourceDiscovery.BaseUrl
+    value: http://localhost:$(Container.ResourceDiscovery.Port)
+  - name: Agent.ResourceDiscovery.Version
+    value: NOTUSED
   jobs:
    - job: BuildLinux
      displayName: Build Linux Docker image
@@ -51,48 +93,89 @@ stages:
      steps:
      - download: current
        artifact: variables
-     - template: ./../templates/read-variable-on-linux.yml
+     - template: templates/utils/read-variable-on-linux.yml
        parameters:
         variableName: 'Image.MajorMinorVersion'
-     - task: DotNetCoreInstaller@0
-       displayName: 'Install .NET SDK'
-       inputs:
-        version: '$(DotNet.SDK.Version)'
+     - template: templates/build/install-sdk.yml
+       parameters:
+        dotnetVersion: '$(DotNet.SDK.Version)'
      - task: DotNetCoreCLI@2
        displayName: 'Run Unit Tests'
        inputs:
         command: test
         projects: src/Promitor.Tests.Unit/Promitor.Tests.Unit.csproj
-     - template: ./../templates/build-scraper-image.yml
+     - template: templates/build-scraper-image.yml
        parameters:
         imageName: '$(Image.TaggedName)'
-        buildArgs: ''
+        buildArgs: 'VERSION="$(Image.Version)"'
         tags: '--tag $(Image.Name):latest --tag $(Image.Name):$(Image.MajorMinorVersion) --tag $(Image.TaggedName)-$(OS.Name) --tag $(Image.Name):$(Image.MajorMinorVersion)-$(OS.Name) --tag $(Image.Name):latest-$(OS.Name)'
         os: '$(OS.Name)'
-     - template: ./../templates/push-docker-image.yml
+     - template: templates/build-discovery-image.yml
+       parameters:
+        imageName: '$(Image.ResourceDiscovery.Name)'
+        tags: '--tag dev'
+        buildArgs: 'VERSION="$(Image.Version)"'
+        os: '$(OS.Name)'
+     - template: templates/docker/create-network.yml
+       parameters:
+        networkName: '$(Container.Network.Name)'
+     - template: templates/agents/run-scraper-image.yml
+       parameters:
+          containerName: '$(Container.Scraper.Name)'
+          containerPort: '$(Container.Scraper.Port)'
+          imageName: '$(Image.Name):$(Image.MajorMinorVersion)'
+          volumes: '$(Pipeline.Workspace)/s/config/promitor/scraper/ci-runtime.yaml:/config/runtime.yaml --volume $(Pipeline.Workspace)/s/config/promitor/scraper/metrics.yaml:/config/metrics-declaration.yaml'
+          activeDirectoryAppId: '$(Agent.Scraper.Auth.AppId)'
+          activeDirectoryAppSecret: '$(Agent.Scraper.Auth.AppSecret)'
+          networkName: '$(Container.Network.Name)'
+          os: '$(OS.Name)'
+     - template: templates/agents/run-discovery-image.yml
+       parameters:
+          imageName: '$(Image.ResourceDiscovery.Name)'
+          containerName: '$(Container.ResourceDiscovery.Name)'
+          containerPort: '$(Container.ResourceDiscovery.Port)'
+          volumes: '$(Pipeline.Workspace)/s/config/promitor/resource-discovery/ci-runtime.yaml:/config/runtime.yaml --volume $(Pipeline.Workspace)/s/config/promitor/resource-discovery/resource-discovery-declaration.yaml:/config/resource-discovery-declaration.yaml'
+          activeDirectoryAppId: '$(Agent.ResourceDiscovery.Auth.AppId)'
+          activeDirectoryAppSecret: '$(Agent.ResourceDiscovery.Auth.AppSecret)'
+          networkName: '$(Container.Network.Name)'
+          os: '$(OS.Name)'
+     - template: templates/docker/show-running-containers.yml
+     - template: templates/tests/run-integration-tests.yml
+       parameters:
+        agentName: 'Scraper'
+        dotnetVersion: '$(DotNet.Sdk.Version)'
+        buildConfiguration: '$(DotNet.Configuration)'
+     - template: templates/docker/show-container-logs.yml
+       parameters:
+        containerName: '$(Container.Scraper.Name)'
+     - template: templates/docker/show-container-logs.yml
+       parameters:
+        containerName: '$(Container.ResourceDiscovery.Name)'
+     - template: templates/docker/push-image.yml
        parameters:
         imageDisplayName: '''{major}.{minor}.{patch}'''
         imageName: '$(Image.TaggedName)'
-     - template: ./../templates/push-docker-image.yml
+     - template: templates/docker/push-image.yml
        parameters:
         imageDisplayName: '''{major}.{minor}.{patch}-$(OS.Name)'''
         imageName: '$(Image.TaggedName)-$(OS.Name)'
-     - template: ./../templates/push-docker-image.yml
-       parameters:
-        imageDisplayName: '''{major}.{minor}'''
-        imageName: '$(Image.Name):$(Image.MajorMinorVersion)'
-     - template: ./../templates/push-docker-image.yml
-       parameters:
-        imageDisplayName: '''{major}.{minor}-$(OS.Name)'''
-        imageName: '$(Image.Name):$(Image.MajorMinorVersion)-$(OS.Name)'
-     - template: ./../templates/push-docker-image.yml
-       parameters:
-        imageDisplayName: '''latest'''
-        imageName: '$(Image.Name):latest'
-     - template: ./../templates/push-docker-image.yml
-       parameters:
-        imageDisplayName: '''latest-$(OS.Name)'''
-        imageName: '$(Image.Name):latest-$(OS.Name)'
+     - ${{ if eq(parameters['releaseType'], 'Full') }}:
+        - template: templates/docker/push-image.yml
+          parameters:
+          imageDisplayName: '''{major}.{minor}'''
+          imageName: '$(Image.Name):$(Image.MajorMinorVersion)'
+        - template: templates/docker/push-image.yml
+          parameters:
+          imageDisplayName: '''{major}.{minor}-$(OS.Name)'''
+          imageName: '$(Image.Name):$(Image.MajorMinorVersion)-$(OS.Name)'
+        - template: templates/docker/push-image.yml
+          parameters:
+            imageDisplayName: '''latest'''
+            imageName: '$(Image.Name):latest'
+        - template: templates/docker/push-image.yml
+          parameters:
+            imageDisplayName: '''latest-$(OS.Name)'''
+            imageName: '$(Image.Name):latest-$(OS.Name)'
    - job: BuildWindows
      displayName: Build Windows Docker image
      pool:
@@ -100,40 +183,78 @@ stages:
      variables:
        OS.Name: 'windows'
      steps:
-     - powershell: |
-        Write-Host "Determining '{major}.{minor}' for '$(Image.Version)'"
-        $index = "$(Image.Version)".IndexOf(".", 2);
-        $majorMinorVersion = "$(Image.Version)".Substring(0, $index);
-        Write-Host "Found version '$majorMinorVersion'"
-        Write-Output ("##vso[task.setvariable variable=Image.MajorMinorVersion;]$majorMinorVersion")
-       displayName: 'Determine ''{major}.{minor}'' version'
-     - task: DotNetCoreInstaller@0
-       displayName: 'Install .NET SDK'
-       inputs:
-        version: '$(DotNet.SDK.Version)'
+     - template: templates/versioning/determine-major-minor-version.yml
+     - template: templates/build/install-sdk.yml
+       parameters:
+        dotnetVersion: '$(DotNet.SDK.Version)'
      - task: DotNetCoreCLI@2
        displayName: 'Run Unit Tests'
        inputs:
         command: test
         projects: src/Promitor.Tests.Unit/Promitor.Tests.Unit.csproj
-     - template: ./../templates/build-scraper-image.yml
+     - template: templates/agents/prepare-scraper-ci-config.yml
+     - template: templates/agents/prepare-discovery-ci-config.yml
+     - template: templates/build-discovery-image.yml
+       parameters:
+        imageName: '$(Image.ResourceDiscovery.Name)'
+        tags: '--tag dev'
+        buildArgs: 'VERSION="$(Image.Version)"'
+        os: '$(OS.Name)'
+     - template: templates/build-scraper-image.yml
        parameters:
         imageName: '$(Image.TaggedName)-$(OS.Name)'
-        buildArgs: '--build-arg CONFIG_FOLDER="c:/config/"'
+        buildArgs: 'VERSION="$(Image.Version)"'
         tags: '--tag $(Image.Name):$(Image.MajorMinorVersion)-$(OS.Name) --tag $(Image.Name):latest-$(OS.Name)'
         os: '$(OS.Name)'
-     - template: ./../templates/push-docker-image.yml
+     - template: templates/docker/create-network.yml
+       parameters:
+        networkName: '$(Container.Network.Name)'
+        driverName: 'nat'
+     - template: templates/agents/run-scraper-image.yml
+       parameters:
+          containerName: '$(Container.Scraper.Name)'
+          containerPort: '$(Container.Scraper.Port)'
+          imageName: '$(Image.Name):$(Image.MajorMinorVersion)-$(OS.Name)'
+          volumes: '$(Pipeline.Workspace)\s\config\promitor\scraper\:c:\config\'
+          activeDirectoryAppId: '$(Agent.Scraper.Auth.AppId)'
+          activeDirectoryAppSecret: '$(Agent.Scraper.Auth.AppSecret)'
+          networkName: '$(Container.Network.Name)'
+          os: '$(OS.Name)'
+     - template: templates/agents/run-discovery-image.yml
+       parameters:
+          imageName: '$(Image.ResourceDiscovery.Name)'
+          containerName: '$(Container.ResourceDiscovery.Name)'
+          containerPort: '$(Container.ResourceDiscovery.Port)'
+          volumes: '$(Pipeline.Workspace)\s\config\promitor\resource-discovery\:c:\config\'
+          activeDirectoryAppId: '$(Agent.ResourceDiscovery.Auth.AppId)'
+          activeDirectoryAppSecret: '$(Agent.ResourceDiscovery.Auth.AppSecret)'
+          networkName: '$(Container.Network.Name)'
+          os: '$(OS.Name)'
+     - template: templates/docker/show-running-containers.yml
+     - template: templates/tests/run-integration-tests.yml
+       parameters:
+        agentName: 'Scraper'
+        dotnetVersion: '$(DotNet.Sdk.Version)'
+        buildConfiguration: '$(DotNet.Configuration)'
+     - template: templates/docker/show-container-logs.yml
+       parameters:
+        containerName: '$(Container.Scraper.Name)'
+     - template: templates/docker/show-container-logs.yml
+       parameters:
+        containerName: '$(Container.ResourceDiscovery.Name)'
+     - template: templates/docker/push-image.yml
        parameters:
         imageDisplayName: '''{major}.{minor}.{patch}-$(OS.Name)'''
         imageName: '$(Image.TaggedName)-$(OS.Name)'
-     - template: ./../templates/push-docker-image.yml
-       parameters:
-        imageDisplayName: '''{major}.{minor}-$(OS.Name)'''
-        imageName: '$(Image.Name):$(Image.MajorMinorVersion)-$(OS.Name)'
-     - template: ./../templates/push-docker-image.yml
-       parameters:
-        imageDisplayName: '''latest-$(OS.Name)'''
-        imageName: '$(Image.Name):latest-$(OS.Name)'
+     - ${{ if eq(parameters['releaseType'], 'Full') }}:
+        - template: templates/docker/push-image.yml
+          parameters:
+            imageDisplayName: '''{major}.{minor}-$(OS.Name)'''
+            imageName: '$(Image.Name):$(Image.MajorMinorVersion)-$(OS.Name)'
+        - template: templates/docker/push-image.yml
+          parameters:
+            imageDisplayName: '''latest-$(OS.Name)'''
+            imageName: '$(Image.Name):latest-$(OS.Name)'
 - stage: ReleaseGitHub
   displayName: Release on GitHub
   dependsOn: Build
@@ -145,47 +266,90 @@ stages:
      steps:
      - download: current
        artifact: variables
-     - template: ./../templates/read-variable-on-linux.yml
+     - template: templates/utils/read-variable-on-linux.yml
        parameters:
         variableName: 'Image.MajorMinorVersion'
-     - task: GitHubRelease@0
-       displayName: 'Create GitHub Release'
-       inputs:
-         gitHubConnection: 'Tom Kerkhove (GitHub - OAuth)'
-         repositoryName: tomkerkhove/promitor
-         action: Create
-         tagSource: manual
-         tag: '$(Release.TagName)'
-         title: '$(Release.Title)'
-         releaseNotesSource: input
-         isDraft: true
-         changeLogType: issueBased
-         releaseNotes: |
-          ### What's new?
-          Here are some important things you should know, for a full list see [changelog.promitor.io](https://changelog.promitor.io/).
-          #### Deprecations
-          Here are a list of new deprecations and how to mitigate them:
-          - TBW _(Discussion [#]())_
-          #### Breaking Changes
-          Here are a list of breaking changes and how to mitigate them:
-          - TBW (#) - _Use new approach documented here_
-          ### Getting started
-          Running Promitor Scraper is super easy:
-          ```
-          docker run -d -p 8999:80 --name promitor-agent-scraper
-                            --env PROMITOR_AUTH_APPID='<azure-ad-app-id>'   \
-                            --env-file C:/Promitor/az-mon-auth.creds \
-                            --volume C:/Promitor/metrics-declaration.yaml:/config/metrics-declaration.yaml \
-                            tomkerkhove/promitor-agent-scraper:$(Image.Version)
-          ```
-          ### Docker Image information
-          New Docker image tags are available:
-          - `latest`, `latest-linux`, `latest-windows`
-          - `$(Image.Version)`, `$(Image.Version)-linux`, `$(Image.Version)-windows`
-          - `$(Image.MajorMinorVersion)`, `$(Image.MajorMinorVersion)-linux`, `$(Image.MajorMinorVersion)-windows`
+     - ${{ if eq(parameters['releaseType'], 'Preview') }}:
+        - task: GitHubRelease@0
+          displayName: 'Create GitHub Pre-Release'
+          inputs:
+            gitHubConnection: 'Tom Kerkhove (GitHub - OAuth)'
+            repositoryName: tomkerkhove/promitor
+            action: Create
+            tagSource: manual
+            tag: '$(Release.TagName)'
+            title: '$(Release.Title)'
+            releaseNotesSource: input
+            isPreRelease: true
+            changeLogType: issueBased
+            changeLogCompareToRelease: 'lastFullRelease'
+            isDraft: true
+            releaseNotes: |
+              ### What's new?
+              Here are some important things you should know, for a full list see [changelog.promitor.io](https://changelog.promitor.io/).
+              #### Deprecations
+              Here are a list of new deprecations and how to mitigate them:
+              - TBW _(Discussion [#]())_
+              #### Breaking Changes
+              Here are a list of breaking changes and how to mitigate them:
+              - TBW (#) - _Use new approach documented here_
+              ### Getting started
+              Running Promitor Scraper is super easy:
+              ```
+              docker run -d -p 8999:80 --name promitor-agent-scraper
+                                --env PROMITOR_AUTH_APPID='<azure-ad-app-id>'   \
+                                --env-file C:/Promitor/az-mon-auth.creds \
+                                --volume C:/Promitor/metrics-declaration.yaml:/config/metrics-declaration.yaml \
+                                tomkerkhove/promitor-agent-scraper:$(Image.Version)
+              ```
+              ### Docker Image information
+              New Docker image tags are available:
+              - `$(Image.Version)`, `$(Image.Version)-linux`, `$(Image.Version)-windows`
+              - `$(Image.MajorMinorVersion)`, `$(Image.MajorMinorVersion)-linux`, `$(Image.MajorMinorVersion)-windows`
 
-          Docker image is available on [Docker Hub](https://hub.docker.com/r/tomkerkhove/promitor-agent-scraper/).<br />
-          For more information about our tagging strategy, feel free to read our [documentation](https://promitor.io/deployment/#image-tagging-strategy).
+              Docker image is available on [Docker Hub](https://hub.docker.com/r/tomkerkhove/promitor-agent-scraper/).<br />
+              For more information about our tagging strategy, feel free to read our [documentation](https://promitor.io/deployment/#image-tagging-strategy).
+     - ${{ if eq(parameters['releaseType'], 'Full') }}:
+        - task: GitHubRelease@0
+          displayName: 'Create GitHub Pre-Release'
+          inputs:
+            gitHubConnection: 'Tom Kerkhove (GitHub - OAuth)'
+            repositoryName: tomkerkhove/promitor
+            action: Create
+            tagSource: manual
+            tag: '$(Release.TagName)'
+            title: '$(Release.Title)'
+            releaseNotesSource: input
+            changeLogType: issueBased
+            changeLogCompareToRelease: 'lastFullRelease'
+            isPreRelease: false
+            isDraft: true
+            releaseNotes: |
+              ### What's new?
+              Here are some important things you should know, for a full list see [changelog.promitor.io](https://changelog.promitor.io/).
+              #### Deprecations
+              Here are a list of new deprecations and how to mitigate them:
+              - TBW _(Discussion [#]())_
+              #### Breaking Changes
+              Here are a list of breaking changes and how to mitigate them:
+              - TBW (#) - _Use new approach documented here_
+              ### Getting started
+              Running Promitor Scraper is super easy:
+              ```
+              docker run -d -p 8999:80 --name promitor-agent-scraper
+                                --env PROMITOR_AUTH_APPID='<azure-ad-app-id>'   \
+                                --env-file C:/Promitor/az-mon-auth.creds \
+                                --volume C:/Promitor/metrics-declaration.yaml:/config/metrics-declaration.yaml \
+                                tomkerkhove/promitor-agent-scraper:$(Image.Version)
+              ```
+              ### Docker Image information
+              New Docker image tags are available:
+              - `latest`, `latest-linux`, `latest-windows`
+              - `$(Image.Version)`, `$(Image.Version)-linux`, `$(Image.Version)-windows`
+              - `$(Image.MajorMinorVersion)`, `$(Image.MajorMinorVersion)-linux`, `$(Image.MajorMinorVersion)-windows`
+
+              Docker image is available on [Docker Hub](https://hub.docker.com/r/tomkerkhove/promitor-agent-scraper/).<br />
+              For more information about our tagging strategy, feel free to read our [documentation](https://promitor.io/deployment/#image-tagging-strategy).
 - stage: ReleaseHelm
   displayName: Release Helm Chart
   dependsOn: Build
@@ -194,20 +358,19 @@ stages:
      displayName: Push Helm Chart to ACR
      pool:
        vmImage: ubuntu-16.04
+     variables:
+     - template: ./variables/helm.yml
      steps:
-     - task: HelmInstaller@0
-       inputs:
-        helmVersion: '2.9.1'
-     - powershell: |
-        mkdir output/
-        helm package promitor-agent-scraper/ --app-version $(Helm.App.Version) --version $(Helm.Chart.Version) --destination output/
-       workingDirectory: charts
-       displayName: 'Package Helm Chart'
-     - task: AzureCLI@1
-       displayName: 'Push Helm Chart to Azure Container Registry'
-       inputs:
-        azureSubscription: 'Visual Studio Enterprise (0f9d7fea-99e8-4768-8672-06a28514f77e)'
-        scriptLocation: inlineScript
-        inlineScript: |
-         az configure --defaults acr=promitor
-         az acr helm push --name promitor charts/output/promitor-agent-scraper-$(Helm.Chart.Version).tgz --force
+     - template: templates/helm/lint-chart.yml
+       parameters:
+        helmVersion: '$(Helm.Version)'
+        chartName: '$(Chart.Scraper.Name)'
+     - template: templates/helm/package-official-chart.yml
+       parameters:
+        chartName: '$(Chart.Scraper.Name)'
+        chartVersion: '$(Helm.Chart.Version)'
+        appVersion: '$(Helm.App.Version)'
+     - template: templates/helm/push-chart.yml
+       parameters:
+        chartName: '$(Chart.Scraper.Name)'
+        chartVersion: '$(Helm.Chart.Version)'
